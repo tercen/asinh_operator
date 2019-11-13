@@ -19,7 +19,7 @@ Output relations|.
 ##### Details
 An asinh of values is performed followed by a scaling.
 ```r
-asinh(value)/scale
+asinh(value/scale)
 ```
 A scale of 5 is recommended for cytof measurement and 150 for flowcyto measurements.
 

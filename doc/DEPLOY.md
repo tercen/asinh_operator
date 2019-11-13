@@ -8,5 +8,5 @@ renv::init()
 
 
 ```
-git add -A && git commit -m "fixed bug and modified name" && git tag -a 0.0.1 -m "++" && git push && git push --tags
+git add -A && git commit -m "fixed the scaling factor" && git tag -a 0.0.4 -m "++" && git push && git push --tags
 ```
