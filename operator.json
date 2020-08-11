@@ -10,6 +10,12 @@
     "name": "scale",
     "defaultValue": 5,
     "description": "The scaling factor to use after the transformation"
-  }
+  },
+    {
+    "kind": "BooleanProperty",
+    "name": "scale per channel",
+    "defaultValue": false,
+    "description": "Uses a scale per channel"
+    }
 ]
 }
