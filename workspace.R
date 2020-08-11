@@ -17,6 +17,8 @@ getOption("tercen.stepId")
 
 ctx = tercenCtx()
 
+
+if (length(ctx$rnames) < 2) stop("require to have a scaling value after channel name in projection")
 sn = sym(ctx$rnames[[2]])
 
 row_df = ctx %>% rselect() %>% mutate(.ri = row_number()-1)
