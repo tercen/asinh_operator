@@ -3,7 +3,7 @@ library(dplyr)
 
 ctx = tercenCtx()
 scale             = as.double(ctx$op.value('scale'))
-scale_per_channel = as.double(ctx$op.value('scale per channel'))
+scale_per_channel = as.logical(ctx$op.value('scale per channel'))
 
 if (scale_per_channel){
   row_df = ctx %>% rselect() %>% mutate(.ri = row_number()-1)
