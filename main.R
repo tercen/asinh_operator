@@ -14,7 +14,7 @@ if (scale_per_channel){
     select(.ri, .ci, .y) %>% 
     left_join(row_df, by = ".ri") %>% 
     group_by(.ri, .ci) %>% 
-    mutate(asinh = asinh(.y)/!!scale_name_sym) %>%
+    mutate(asinh = asinh(.y/!!scale_name_sym)) %>%
     select(.ri, .ci, asinh) %>%
     ctx$addNamespace() %>%
     ctx$save()
@@ -23,7 +23,7 @@ if (scale_per_channel){
   ctx  %>%
   select(.ri, .ci, .y) %>%
   group_by(.ri, .ci) %>% 
-  mutate(asinh = asinh(.y)/scale) %>%
+  mutate(asinh = asinh(.y/scale)) %>%
   select(.ri, .ci, asinh) %>%
   ctx$addNamespace() %>%
   ctx$save()
