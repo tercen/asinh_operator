@@ -2,10 +2,11 @@ library(tercen)
 library(dplyr)
 
 ctx = tercenCtx()
-scale             = as.double(ctx$op.value('scale'))
-scale_per_channel = as.logical(ctx$op.value('scale per channel'))
+scale = NULL
+if (as.character(ctx$op.value('scale')) != "NULL")  scale  = as.integer(ctx$op.value('scale'))
 
-if (scale_per_channel){
+
+if (is.null(scale)){
   if (length(ctx$rnames) < 2) stop("require to have a scaling value after channel name in projection")
   row_df = ctx %>% rselect() %>% mutate(.ri = row_number()-1)
   scale_colname = sym(ctx$rnames[[2]])
