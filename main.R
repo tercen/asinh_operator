@@ -6,15 +6,15 @@ scale             = as.double(ctx$op.value('scale'))
 scale_per_channel = as.logical(ctx$op.value('scale per channel'))
 
 if (scale_per_channel){
-  row_df = ctx %>% rselect() %>% mutate(.ri = row_number()-1)
   if (length(ctx$rnames) < 2) stop("require to have a scaling value after channel name in projection")
-  scale_name_sym = sym(ctx$rnames[[2]])
+  row_df = ctx %>% rselect() %>% mutate(.ri = row_number()-1)
+  scale_colname = sym(ctx$rnames[[2]])
   
   ctx %>% 
     select(.ri, .ci, .y) %>% 
     left_join(row_df, by = ".ri") %>% 
     group_by(.ri, .ci) %>% 
-    mutate(asinh = asinh(.y/!!scale_name_sym)) %>%
+    mutate(asinh = asinh(.y/!!scale_colname)) %>%
     select(.ri, .ci, asinh) %>%
     ctx$addNamespace() %>%
     ctx$save()
