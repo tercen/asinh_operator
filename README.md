@@ -12,7 +12,7 @@ Input projection|.
 
 Input parameters|.
 ---|---
-`scale`             | numeric, the scaling factor to use before the asinh transformation, default is 5
+`scale`  | numeric, the scaling factor to use before the asinh transformation, a NULL value indicates different scaling values per channel, default is 5
 
 Output relations|.
 ---|---
@@ -25,7 +25,7 @@ asinh(value/scale)
 ```
 A scale of 5 is recommended for cytof measurement and 150 for flowcyto measurements.
 
-if a NULL scaling value is used then it scaling factor is found in the cross-tab projection, the second factor in the `row` dimension.
+if a NULL scaling value is used then then scaling factor is give by the cross-tab projection, the second factor in the `row` dimension indicates the scaling values.
 
 
 #### References
