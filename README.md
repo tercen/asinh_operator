@@ -19,14 +19,14 @@ Output relations|.
 `asinh`| numeric, output transformation per `row` and `col`.
 
 ##### Details
-Values are scaled first and then asinh tranfrmation is performed. One data point per cell is required as input. if a NULL scaling value is used then it scaling factor is found in the cross-tab projection, the second factor in the `row` dimension.
-
+Values are scaled first and then asinh tranfrmation is performed. One data point per cell is required as input. 
 ```r
 asinh(value/scale)
 ```
 A scale of 5 is recommended for cytof measurement and 150 for flowcyto measurements.
 
-If used in the `scale per channel` mode then an extra factor indicating the scaling value is required in the cross-tab projection on the `row` dimension in the second position.
+if a NULL scaling value is used then it scaling factor is found in the cross-tab projection, the second factor in the `row` dimension.
+
 
 #### References
 see the `base::asinh` function of the R package for the documentation,
