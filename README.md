@@ -6,21 +6,20 @@
 ##### Usage
 Input projection|.
 ---|---
-`y-axis` | values as input to the asinh operator
-`row`    | channels, and scale (optional)
+`y-axis` | values required to be transformed by the asinh operator
+`row`    | channels, and scale values (optional)
 `col`    | event, for example
 
 Input parameters|.
 ---|---
-`scale`             | numeric, the scaling factor to use after the asinh transformation, default is 5
-`scale per channel` | boolean, indicates if a different scaling factor per channel is performed, default is false
+`scale`             | numeric, the scaling factor to use before the asinh transformation, default is 5
 
 Output relations|.
 ---|---
 `asinh`| numeric, output transformation per `row` and `col`.
 
 ##### Details
-An asinh of values is performed followed by a scaling. One data point per cell is required as input
+Values are scaled first and then asinh tranfrmation is performed. One data point per cell is required as input. if a NULL scaling value is used then it scaling factor is found in the cross-tab projection, the second factor in the `row` dimension.
 
 ```r
 asinh(value/scale)
