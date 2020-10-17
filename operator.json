@@ -1,7 +1,7 @@
 {
   "name": "asinh",
   "description": "asinh transformation a given data",
-  "tags": ["simple statistics"],
+  "tags": ["data transformation", "data wrangling", "transform"],
   "authors": ["tercen"],
   "urls": ["https://github.com/tercen/asinh_operator"],
   "properties": [
