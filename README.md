@@ -2,13 +2,13 @@
 
 ##### Description
 
-`asinh` operator performs an inverse hyperbolic sine on values
+`asinh` operator performs an inverse hyperbolic sine on values. Also denoted as arcsinh, arsinh, or argsinh.
 
 ##### Usage
 
 Input projection|.
 ---|---
-`y-axis` | values required to be transformed by the asinh operator
+`y-axis` | numeric,values required to be transformed by the asinh operator
 `row`    | channels, and scale values (optional)
 `col`    | event, for example
 
