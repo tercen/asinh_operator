@@ -1,0 +1,13 @@
+{
+  "kind": "OperatorUnitTest",
+  "name": "asinh",
+  "namespace": "test",
+  "inputDataUri": "example_1.fcs",
+  "outputDataUri": "result_example_1.fcs",
+  "columns": ["observation"],
+  "rows": ["variable"],
+  "colors": [],
+  "labels": [],
+  "yAxis": "measurement",
+  "xAxis": ""
+}
