@@ -3,7 +3,7 @@
   "name": "asinh",
   "namespace": "test",
   "inputDataUri": "crabs-long.csv",
-  "outputDataUri": "asinh_workflow-Export.csv",
+  "outputDataUri": ["asinh_workflow-Export.csv"],
   "columns": ["observation"],
   "rows": ["variable"],
   "colors": [],
