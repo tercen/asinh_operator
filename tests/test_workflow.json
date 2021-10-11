@@ -3,7 +3,7 @@
   "name": "asinh",
   "namespace": "test",
   "inputDataUri": "crabs-long.csv",
-  "outputDataUri": ["output_asinh.csv"],
+  "outputDataUri": ["table1.csv","table2.csv","table3.csv"],
   "columns": ["observation"],
   "rows": ["variable"],
   "colors": [],
