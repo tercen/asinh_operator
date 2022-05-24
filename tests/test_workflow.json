@@ -1,7 +1,7 @@
 {
   "kind": "OperatorUnitTest",
   "name": "asinh",
-  "namespace": "test",
+  "namespace": "ds0",
   "inputDataUri": "crabs-long.csv",
   "outputDataUri": ["table1.csv","table2.csv","table3.csv"],
   "columns": ["observation"],

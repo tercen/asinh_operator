@@ -14,7 +14,7 @@ Input projection|.
 
 Input parameters|.
 ---|---
-`scale`  | numeric, the scaling factor to use before the asinh transformation, a NULL value indicates different scaling values per channel, default is 5
+`scale`  | numeric, the scaling factor to use before the asinh transformation, a negative value indicates different scaling values per channel, default is 5
 
 Output relations|.
 ---|---
