@@ -1,15 +1,22 @@
 {
   "name": "asinh",
   "description": "Transforms values using inverse hyperpolic functions. Also denoted as arcsinh, arsinh, or argsinh.",
-  "tags": ["data transformation", "data wrangling", "transform","flow cytometry"],
-  "authors": ["tercen"],
-  "urls": ["https://github.com/tercen/asinh_operator"],
+  "tags": [
+    "preprocessing",
+    "transformation"
+  ],
+  "authors": [
+    "tercen"
+  ],
+  "urls": [
+    "https://github.com/tercen/asinh_operator"
+  ],
   "properties": [
-   {
-    "kind": "StringProperty",
-    "name": "scale",
-    "defaultValue": "5",
-    "description": "The scaling factor to use before the transformation, a NULL value indicates a different scaling value for each channel"
-  }
-]
+    {
+      "kind": "StringProperty",
+      "name": "scale",
+      "defaultValue": "5",
+      "description": "The scaling factor to use before the transformation, a NULL value indicates a different scaling value for each channel"
+    }
+  ]
 }
