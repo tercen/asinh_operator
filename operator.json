@@ -1,6 +1,6 @@
 {
   "name": "asinh",
-  "description": "Transforms values using inverse hyperpolic functions. Also denoted as arcsinh, arsinh, or argsinh.",
+  "description": "Computes the inverse hyperpolic sine (arcsinh, arsinh, or argsinh) of your data.",
   "tags": [
     "preprocessing",
     "transformation"
