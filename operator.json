@@ -1,6 +1,6 @@
 {
   "name": "asinh",
-  "description": "Computes the inverse hyperpolic sine (arcsinh, arsinh, or argsinh) of your data.",
+  "description": "Computes the inverse hyperpolic sine (arcsinh, arsinhn, or argsinh) of your data.",
   "tags": [
     "preprocessing",
     "transformation"
@@ -16,7 +16,56 @@
       "kind": "StringProperty",
       "name": "scale",
       "defaultValue": "5",
-      "description": "The scaling factor to use before the transformation, a NULL value indicates a different scaling value for each channel"
+      "description": "The scaling factor to use before the transformation, a negative value indicates different scaling values per channel"
     }
-  ]
+  ],
+  "operatorSpec": {
+    "kind": "OperatorSpec",
+    "ontologyUri": "https://tercen.com/_ontology/tercen",
+    "ontologyVersion": "0.0.1",
+    "inputSpecs": [
+      {
+        "kind": "CrosstabSpec",
+        "metaFactors": [
+          {
+            "kind": "MetaFactor",
+            "name": "Channel",
+            "type": "",
+            "description": "The channel identifiers",
+            "ontologyMapping": "variable",
+            "crosstabMapping": "column",
+            "cardinality": "1..n",
+            "factors": []
+          },
+          {
+            "kind": "MetaFactor",
+            "name": "Events",
+            "type": "",
+            "description": "Observation identifiers (event ID)",
+            "ontologyMapping": "observation",
+            "crosstabMapping": "row",
+            "cardinality": "1..n",
+            "factors": []
+          }
+        ],
+        "axis": [
+          {
+            "kind": "AxisSpec",
+            "metaFactors": [
+              {
+                "kind": "MetaFactor",
+                "name": "measurement",
+                "type": "numeric",
+                "description": "Values required to be transformed by the asinh operator",
+                "ontologyMapping": "measurement",
+                "crosstabMapping": "y",
+                "cardinality": "1",
+                "factors": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
 }
