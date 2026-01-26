@@ -8,13 +8,14 @@
 
 Input projection|.
 ---|---
-`y-axis` | numeric,values required to be transformed by the asinh operator
-`row`    | channels, and scale values (optional)
+`y-axis` | numeric, values required to be transformed by the asinh operator
+`row`    | channels, and scale values (optional, required for manual/flowvs methods)
 `col`    | event, for example
 
 Input parameters|.
 ---|---
-`scale`  | numeric, the scaling factor to use before the asinh transformation, a negative value indicates different scaling values per channel, default is 5
+`method` | string, transformation method: 'fixed' (default), 'manual', or 'flowvs'
+`scale`  | numeric, the scaling factor to use before the asinh transformation (only used when method is 'fixed'), default is 5
 
 Output relations|.
 ---|---
@@ -22,14 +23,28 @@ Output relations|.
 
 ##### Details
 
-Values are scaled first and then asinh transformation is performed. One data point per cell is required as input. 
+Values are scaled first and then asinh transformation is performed. One data point per cell is required as input.
 ```r
 asinh(value/scale)
 ```
-A scale of 5 is recommended for cytof measurement and 150 for flowcyto measurements.
 
-If a NULL scaling value is used then the scaling factor is give by the input cross-tab projection, the second factor defined in the `row` dimension indicates the scaling values to use per channel.
+##### Methods
+
+**fixed** (default)
+Uses a global scale parameter for all channels. A scale of 5 is recommended for CyTOF measurements and 150 for flow cytometry measurements.
+
+**manual**
+Reads per-channel scale values from the row factor. Requires a second factor in the `row` dimension that provides the scaling value for each channel.
+
+**flowvs**
+Automatically estimates optimal cofactors per channel using the flowVS R package's `estParamFlowVS()` function. This method analyzes the data distribution for each channel and determines the best transformation parameter.
+
+Requirements for flowvs method:
+- Channel names must be provided in the row projection
+- Data is automatically reshaped from long format to wide format for flowVS processing
+- Estimated cofactors typically range between 1 and 1000 for cytometry data
 
 ##### References
 
-See the `base::asinh` [function of the R package for more information](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions).
+- See the `base::asinh` [function of the R package for more information](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions).
+- flowVS package: [Bioconductor](https://bioconductor.org/packages/flowVS/)

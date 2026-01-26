@@ -13,10 +13,17 @@
   ],
   "properties": [
     {
+      "kind": "EnumeratedProperty",
+      "name": "method",
+      "defaultValue": "fixed",
+      "values": ["fixed", "manual", "flowvs"],
+      "description": "Method: 'fixed' uses global scale, 'manual' reads per-channel scales from row factor, 'flowvs' automatically estimates optimal cofactors"
+    },
+    {
       "kind": "StringProperty",
       "name": "scale",
       "defaultValue": "5",
-      "description": "The scaling factor to use before the transformation, a NULL value indicates a different scaling value for each channel"
+      "description": "The scaling factor to use before the transformation (only used when method is 'fixed')"
     }
   ],
   "operatorSpec": {
