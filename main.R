@@ -246,7 +246,7 @@ if (method == "auto") {
     as_tibble()
 
   row_df <- ctx$rselect(channel_colname) %>%
-    mutate(.ri = row_number() - 1)
+    mutate(.ri = as.integer(row_number() - 1L))
 
   data_with_channels <- data_df %>%
     left_join(row_df, by = ".ri")
@@ -260,6 +260,7 @@ if (method == "auto") {
   result <- data_with_channels %>%
     left_join(cofactor_df, by = channel_colname) %>%
     mutate(asinh = asinh(.y / cofactor)) %>%
+    mutate(.ri = as.integer(.ri), .ci = as.integer(.ci)) %>%
     select(.ri, .ci, asinh)
 
   result %>%
@@ -272,7 +273,7 @@ if (method == "auto") {
     stop("manual method requires a scaling value after channel name in projection")
 
   row_df <- ctx$rselect(ctx$rnames[[2]]) %>%
-    mutate(.ri = row_number() - 1) %>%
+    mutate(.ri = as.integer(row_number() - 1L)) %>%
     lazy_dt()
 
   scale_colname <- sym(ctx$rnames[[2]])
