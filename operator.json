@@ -16,8 +16,8 @@
       "kind": "EnumeratedProperty",
       "name": "method",
       "defaultValue": "fixed",
-      "values": ["fixed", "manual", "flowvs"],
-      "description": "Method: 'fixed' uses global scale, 'manual' reads per-channel scales from row factor, 'flowvs' automatically estimates optimal cofactors"
+      "values": ["fixed", "manual", "auto"],
+      "description": "Method: 'fixed' uses global scale, 'manual' reads per-channel scales from row factor, 'auto' automatically estimates optimal cofactors per channel"
     },
     {
       "kind": "StringProperty",
