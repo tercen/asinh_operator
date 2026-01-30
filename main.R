@@ -1,7 +1,3 @@
-# Limit OpenBLAS threads to avoid pthread_create errors in containers
-Sys.setenv(OPENBLAS_NUM_THREADS = 1)
-Sys.setenv(OMP_NUM_THREADS = 1)
-
 library(tercenApi)
 library(tercen)
 library(dplyr, warn.conflicts = FALSE)
