@@ -24,6 +24,12 @@
       "name": "scale",
       "defaultValue": "5",
       "description": "The scaling factor to use before the transformation (only used when method is 'fixed')"
+    },
+    {
+      "kind": "StringProperty",
+      "name": "docker.image",
+      "defaultValue": "ghcr.io/tercen/flowvs:latest",
+      "description": "Docker image for flowVS cofactor estimation (only used when method is 'auto')"
     }
   ],
   "operatorSpec": {

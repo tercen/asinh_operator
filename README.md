@@ -16,6 +16,7 @@ Input parameters|.
 ---|---
 `method` | string, transformation method: 'fixed' (default), 'manual', or 'auto'
 `scale`  | numeric, the scaling factor to use before the asinh transformation (only used when method is 'fixed'), default is 5
+`docker.image` | string, Docker image for flowVS (only used when method is 'auto'), default is 'ghcr.io/tercen/flowvs:latest'
 
 Output relations|.
 ---|---
@@ -46,9 +47,30 @@ The algorithm:
 4. Uses golden section search over logarithmic cofactor space (10⁻¹ to 10¹⁰) to find the optimal cofactor that minimizes Bartlett's statistic
 
 Requirements for auto method:
+- **Docker must be installed and running** on the system
+- The flowVS Docker image must be available (pulled automatically or manually with `docker pull ghcr.io/tercen/flowvs:latest`)
 - Channel names must be provided in the row projection
-- At least 100 data points per channel for reliable peak detection
-- Falls back to percentile-based estimation if peak detection fails
+- At least 100 data points per channel for reliable estimation
+- Multiple samples recommended for robust cofactor estimation
+
+##### Docker Requirements (auto method only)
+
+The `auto` method uses the [flowVS](https://bioconductor.org/packages/flowVS/) algorithm from Bioconductor, which runs inside a Docker container. This ensures exact reproducibility of the original flowVS implementation.
+
+**Prerequisites:**
+- Docker must be installed and running
+- Internet access to pull the image (first run only)
+
+**Docker image:**
+- Default: `ghcr.io/tercen/flowvs:latest`
+- Can be overridden with the `docker.image` parameter
+
+**Manual image pull (optional):**
+```bash
+docker pull ghcr.io/tercen/flowvs:latest
+```
+
+If Docker is not available, the operator will display an error message suggesting to use the `fixed` or `manual` methods instead.
 
 ##### References
 

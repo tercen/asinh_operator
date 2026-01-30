@@ -8,225 +8,128 @@ library(tidyr)
 ctx <- tercenCtx()
 method <- ctx$op.value("method", type = as.character, default = "fixed")
 scale <- ctx$op.value("scale", type = as.integer, default = 5)
+docker_image <- ctx$op.value("docker.image", type = as.character, default = "ghcr.io/tercen/flowvs:latest")
 
 # =============================================================================
-# Native implementation of flowVS algorithm for variance stabilization
-# Based on: Azad et al. (2016) "flowVS: Channel-Specific Variance Stabilization
-# in Flow Cytometry", BMC Bioinformatics
+# flowVS cofactor estimation using Docker container
+# The container runs the actual flowVS package from Bioconductor
+# Image: ghcr.io/tercen/flowvs (configurable via docker.image property)
 # =============================================================================
 
-#' Find density peaks using kernel density estimation
-#' @param x numeric vector of values
-#' @param n number of points for density estimation
-#' @return list with peak locations and boundaries
-find_density_peaks <- function(x, n = 512) {
-  x <- x[is.finite(x)]
-  if (length(x) < 10) return(NULL)
+#' Check if Docker is available
+#' @return TRUE if Docker is available, FALSE otherwise
+check_docker_available <- function() {
+  result <- tryCatch({
+    exit_code <- system("docker --version", intern = FALSE, ignore.stdout = TRUE, ignore.stderr = TRUE)
+    exit_code == 0
+  }, error = function(e) FALSE)
+  result
+}
 
-  # Compute kernel density estimate
-  dens <- density(x, n = n, na.rm = TRUE)
+#' Estimate cofactors using flowVS Docker container
+#' @param data_df data frame with columns: sample_id, and channel columns
+#' @param channels character vector of channel names to estimate
+#' @param docker_image Docker image to use
+#' @return data frame with columns: channel, cofactor
+estimate_cofactors_docker <- function(data_df, channels, docker_image) {
+  # Check Docker availability
+  if (!check_docker_available()) {
+    stop("Docker is not available. The 'auto' method requires Docker to be installed and running. ",
+         "Please install Docker or use 'fixed' or 'manual' methods instead.")
+  }
 
-  # Find local maxima (peaks) and minima (valleys)
-  # A peak is where the derivative changes from positive to negative
-  dy <- diff(dens$y)
-  peaks_idx <- which(dy[-length(dy)] > 0 & dy[-1] < 0) + 1
-  valleys_idx <- which(dy[-length(dy)] < 0 & dy[-1] > 0) + 1
+  # Create temporary directory for input/output
+  tmp_dir <- tempdir()
+  input_file <- file.path(tmp_dir, "flowvs_input.csv")
+  output_file <- file.path(tmp_dir, "flowvs_output.csv")
+  script_file <- file.path(tmp_dir, "run_flowvs.R")
 
-  if (length(peaks_idx) == 0) return(NULL)
+  # Ensure cleanup happens even on error
+  on.exit({
+    if (file.exists(input_file)) unlink(input_file)
+    if (file.exists(output_file)) unlink(output_file)
+    if (file.exists(script_file)) unlink(script_file)
+  }, add = TRUE)
 
-  # Filter peaks by prominence (at least 5% of max density)
-  peak_heights <- dens$y[peaks_idx]
-  min_height <- max(dens$y) * 0.05
-  significant_peaks <- peaks_idx[peak_heights >= min_height]
+  # Ensure sample_id column exists
+  if (!"sample_id" %in% names(data_df)) {
+    stop("data_df must have a 'sample_id' column")
+  }
 
-  if (length(significant_peaks) == 0) return(NULL)
+  # Write input data
+  write.csv(data_df, input_file, row.names = FALSE)
 
-  # Get peak locations
-  peak_locations <- dens$x[significant_peaks]
+  # Build channels argument
+  channels_arg <- paste(channels, collapse = ",")
 
-  # Determine boundaries between peaks using valleys
-  boundaries <- c(min(x), dens$x[valleys_idx], max(x))
-  boundaries <- sort(unique(boundaries))
+  # Write R script to file (avoids escaping issues)
+  r_script <- sprintf('
+.libPaths(c("/app/renv/library/R-4.3/x86_64-pc-linux-gnu", .libPaths()))
+pdf(NULL)
+suppressPackageStartupMessages({
+  library(flowVS)
+  library(flowCore)
+})
 
-  list(
-    peaks = peak_locations,
-    boundaries = boundaries,
-    density = dens
+data <- read.csv("/data/flowvs_input.csv", stringsAsFactors = FALSE)
+channels <- strsplit("%s", ",")[[1]]
+
+sample_ids <- unique(data$sample_id)
+frames <- lapply(sample_ids, function(sid) {
+  subset_data <- data[data$sample_id == sid, channels, drop = FALSE]
+  flowFrame(as.matrix(subset_data))
+})
+names(frames) <- sample_ids
+fs <- flowSet(frames)
+
+cofactors <- estParamFlowVS(fs, channels)
+
+result <- data.frame(channel = channels, cofactor = cofactors)
+write.csv(result, "/data/flowvs_output.csv", row.names = FALSE)
+', channels_arg)
+
+  writeLines(r_script, script_file)
+
+  # Build Docker command using script file
+  docker_cmd <- sprintf(
+    'docker run --rm -w /tmp -v "%s:/data" --entrypoint /usr/local/bin/Rscript %s /data/run_flowvs.R',
+    tmp_dir,
+    docker_image
   )
-}
 
-#' Assign data points to peaks based on boundaries
-#' @param x numeric vector of values
-#' @param peak_info output from find_density_peaks
-#' @return integer vector of peak assignments (1, 2, 3, ...)
-assign_to_peaks <- function(x, peak_info) {
-  if (is.null(peak_info)) return(rep(1L, length(x)))
+  # Run Docker container with error handling
+  cat("Running flowVS via Docker container...\n")
+  cat("Docker image:", docker_image, "\n")
+  cat("Channels:", channels_arg, "\n")
 
-  peaks <- peak_info$peaks
-  boundaries <- peak_info$boundaries
+  result <- tryCatch({
+    output <- system(docker_cmd, intern = TRUE, ignore.stderr = FALSE)
+    attr(output, "status")
+  }, error = function(e) {
+    stop("Failed to run Docker container: ", e$message, "\n",
+         "Ensure the Docker image '", docker_image, "' is available. ",
+         "You can pull it with: docker pull ", docker_image)
+  })
 
-  # Assign each point to a peak region
-  assignments <- rep(NA_integer_, length(x))
+  exit_code <- if (is.null(result)) 0 else result
 
-  for (i in seq_along(peaks)) {
-    # Find boundary indices that surround this peak
-    lower_bound <- max(boundaries[boundaries <= peaks[i]])
-    upper_bound <- min(boundaries[boundaries >= peaks[i]])
-
-    # Handle edge cases
-    if (i == 1) lower_bound <- min(boundaries)
-    if (i == length(peaks)) upper_bound <- max(boundaries)
-
-    # Assign points within this range
-    in_range <- x >= lower_bound & x < upper_bound
-    assignments[in_range] <- i
+  if (exit_code != 0) {
+    stop("Docker flowVS container failed with exit code: ", exit_code, "\n",
+         "Ensure the Docker image '", docker_image, "' is available and working.")
   }
 
-  # Assign remaining points to nearest peak
-  remaining <- is.na(assignments)
-  if (any(remaining)) {
-    for (j in which(remaining)) {
-      distances <- abs(x[j] - peaks)
-      assignments[j] <- which.min(distances)
-    }
+  # Read output
+  if (!file.exists(output_file)) {
+    stop("flowVS output file not found. The Docker container may have failed silently. ",
+         "Check that the image '", docker_image, "' contains the flowVS package.")
   }
 
-  assignments
-}
+  cofactor_df <- read.csv(output_file, stringsAsFactors = FALSE)
 
-#' Calculate Bartlett's test statistic for homogeneity of variances
-#' @param x numeric vector of transformed values
-#' @param groups integer vector of group assignments
-#' @return Bartlett's statistic (lower = more homogeneous variances)
-bartlett_statistic <- function(x, groups) {
-  # Remove NA and infinite values
-  valid <- is.finite(x) & !is.na(groups)
-  x <- x[valid]
-  groups <- groups[valid]
+  cat("Estimated cofactors:\n")
+  print(cofactor_df)
 
-  unique_groups <- unique(groups)
-  m <- length(unique_groups)  # number of groups
-
-  if (m < 2) return(Inf)
-
-  # Calculate per-group statistics
-  n_i <- numeric(m)      # group sizes
-  var_i <- numeric(m)    # group variances
-
-  for (i in seq_along(unique_groups)) {
-    group_data <- x[groups == unique_groups[i]]
-    n_i[i] <- length(group_data)
-    if (n_i[i] < 2) return(Inf)
-    var_i[i] <- var(group_data)
-  }
-
-  # Check for zero or invalid variances
-  if (any(var_i <= 0) || any(!is.finite(var_i))) return(Inf)
-
-  # Total sample size
-  n <- sum(n_i)
-
-  # Pooled variance estimate
-  df_i <- n_i - 1
-  var_pooled <- sum(df_i * var_i) / sum(df_i)
-
-  if (var_pooled <= 0 || !is.finite(var_pooled)) return(Inf)
-
-  # Bartlett's statistic numerator
-  numerator <- (n - m) * log(var_pooled) - sum(df_i * log(var_i))
-
-  # Bartlett's correction factor
-  correction <- 1 + (1 / (3 * (m - 1))) * (sum(1 / df_i) - 1 / (n - m))
-
-  # Bartlett's statistic
-  B <- numerator / correction
-
-  if (!is.finite(B)) return(Inf)
-
-  B
-}
-
-#' Objective function for flowVS optimization
-#' @param cofactor the cofactor to evaluate
-#' @param x raw data values
-#' @return Bartlett's statistic after asinh transformation
-flowvs_objective <- function(cofactor, x) {
-  if (cofactor <= 0) return(Inf)
-
-  # Transform data
-  transformed <- asinh(x / cofactor)
-
-  # Find peaks in transformed data
-  peak_info <- find_density_peaks(transformed)
-
-  if (is.null(peak_info) || length(peak_info$peaks) < 2) {
-    # If we can't find multiple peaks, return a penalty
-    # but not Inf to allow optimization to continue
-    return(1e10)
-  }
-
-  # Assign points to peaks
-  groups <- assign_to_peaks(transformed, peak_info)
-
-  # Calculate Bartlett's statistic
-  B <- bartlett_statistic(transformed, groups)
-
-  B
-}
-
-#' Estimate optimal cofactor using flowVS algorithm
-#' Performs golden section search over logarithmic cofactor space
-#' @param values numeric vector of channel values
-#' @param cf_low lower bound for cofactor search (log10 scale), default -1
-#' @param cf_high upper bound for cofactor search (log10 scale), default 10
-#' @return optimal cofactor value
-estimate_cofactor_flowvs <- function(values, cf_low = -1, cf_high = 10) {
-  values <- values[is.finite(values)]
-
-  if (length(values) < 100) {
-    # Not enough data for reliable peak detection, use fallback
-    return(5)
-  }
-
-  # Grid search over logarithmic intervals
-  # Divide [cf_low, cf_high] into unit intervals and search each
-  intervals <- seq(cf_low, cf_high, by = 1)
-
-  best_cofactor <- 5
-  best_stat <- Inf
-
-  for (i in seq_len(length(intervals) - 1)) {
-    low <- 10^intervals[i]
-    high <- 10^intervals[i + 1]
-
-    # Golden section search within this interval
-    result <- tryCatch({
-      optimize(
-        f = flowvs_objective,
-        interval = c(low, high),
-        x = values,
-        tol = 0.01 * (high - low)
-      )
-    }, error = function(e) NULL)
-
-    if (!is.null(result) && is.finite(result$objective)) {
-      if (result$objective < best_stat) {
-        best_stat <- result$objective
-        best_cofactor <- result$minimum
-      }
-    }
-  }
-
-  # If optimization failed completely, use percentile fallback
-  if (!is.finite(best_stat) || best_stat > 1e9) {
-    positive_values <- values[values > 0]
-    if (length(positive_values) >= 10) {
-      best_cofactor <- as.numeric(quantile(positive_values, 0.05, na.rm = TRUE))
-      best_cofactor <- max(0.1, min(1e10, best_cofactor))
-    }
-  }
-
-  best_cofactor
+  cofactor_df
 }
 
 # =============================================================================
@@ -234,7 +137,7 @@ estimate_cofactor_flowvs <- function(values, cf_low = -1, cf_high = 10) {
 # =============================================================================
 
 if (method == "auto") {
-  # Automatic cofactor estimation per channel using flowVS algorithm
+  # Automatic cofactor estimation per channel using flowVS Docker container
   if (length(ctx$rnames) < 1)
     stop("auto method requires channel names in row projection")
 
@@ -251,15 +154,52 @@ if (method == "auto") {
   data_with_channels <- data_df %>%
     left_join(row_df, by = ".ri")
 
-  # Estimate cofactors per channel using flowVS algorithm
-  cofactor_df <- data_with_channels %>%
-    group_by(!!sym(channel_colname)) %>%
-    summarise(cofactor = estimate_cofactor_flowvs(.y), .groups = "drop")
+  # Get column names (the columns in ctx)
+  col_df <- ctx$cselect() %>%
+    mutate(.ci = as.integer(row_number() - 1L))
+
+  # Check if there's a sample identifier in the column factors
+  # Default to using .ci as sample_id if no sample column exists
+  if (ncol(col_df) > 1) {
+    sample_col <- names(col_df)[1]  # First column factor as sample_id
+    data_with_samples <- data_with_channels %>%
+      left_join(col_df, by = ".ci") %>%
+      rename(sample_id = !!sym(sample_col))
+  } else {
+    # Use .ci as sample_id
+    data_with_samples <- data_with_channels %>%
+      mutate(sample_id = paste0("sample_", .ci))
+  }
+
+  # Get unique channels
+  channels <- unique(data_with_samples[[channel_colname]])
+
+  # Pivot data to wide format for flowVS (each channel as a column)
+  wide_data <- data_with_samples %>%
+    select(sample_id, .ci, !!sym(channel_colname), .y) %>%
+    mutate(cell_id = row_number()) %>%
+    pivot_wider(
+      id_cols = c(sample_id, cell_id),
+      names_from = !!sym(channel_colname),
+      values_from = .y
+    ) %>%
+    select(-cell_id)
+
+  # Remove rows with any NA values (incomplete cases)
+  wide_data <- wide_data[complete.cases(wide_data), ]
+
+  # Estimate cofactors using Docker
+  cofactor_df <- estimate_cofactors_docker(wide_data, channels, docker_image)
+
+  # Convert to named vector for lookup
+  cofactors <- setNames(cofactor_df$cofactor, cofactor_df$channel)
 
   # Join cofactors back and apply transformation
   result <- data_with_channels %>%
-    left_join(cofactor_df, by = channel_colname) %>%
-    mutate(asinh = asinh(.y / cofactor)) %>%
+    mutate(
+      cofactor = cofactors[as.character(!!sym(channel_colname))],
+      asinh = asinh(.y / cofactor)
+    ) %>%
     mutate(.ri = as.integer(.ri), .ci = as.integer(.ci)) %>%
     select(.ri, .ci, asinh)
 
