@@ -11,7 +11,7 @@
   "urls": [
     "https://github.com/tercen/asinh_operator"
   ],
-  "container": "bioconductor/bioconductor_docker:RELEASE_3_12",
+  "container": "ghcr.io/tercen/flowvs:latest",
   "properties": [
     {
       "kind": "EnumeratedProperty",
