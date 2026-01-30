@@ -16,28 +16,12 @@ docker_image <- ctx$op.value("docker.image", type = as.character, default = "ghc
 # Image: ghcr.io/tercen/flowvs (configurable via docker.image property)
 # =============================================================================
 
-#' Check if Docker is available
-#' @return TRUE if Docker is available, FALSE otherwise
-check_docker_available <- function() {
-  result <- tryCatch({
-    exit_code <- system("docker --version", intern = FALSE, ignore.stdout = TRUE, ignore.stderr = TRUE)
-    exit_code == 0
-  }, error = function(e) FALSE)
-  result
-}
-
 #' Estimate cofactors using flowVS Docker container
 #' @param data_df data frame with columns: sample_id, and channel columns
 #' @param channels character vector of channel names to estimate
 #' @param docker_image Docker image to use
 #' @return data frame with columns: channel, cofactor
 estimate_cofactors_docker <- function(data_df, channels, docker_image) {
-  # Check Docker availability
-  if (!check_docker_available()) {
-    stop("Docker is not available. The 'auto' method requires Docker to be installed and running. ",
-         "Please install Docker or use 'fixed' or 'manual' methods instead.")
-  }
-
   # Create temporary directory for input/output
   tmp_dir <- tempdir()
   input_file <- file.path(tmp_dir, "flowvs_input.csv")
