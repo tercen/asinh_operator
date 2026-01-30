@@ -4,6 +4,8 @@
 
 `asinh` operator performs an inverse hyperbolic sine on values. Also denoted as arcsinh, arsinh, or argsinh.
 
+This is a Docker-based operator running in the `ghcr.io/tercen/flowvs` container, which includes the flowVS package from Bioconductor for automatic cofactor estimation.
+
 ##### Usage
 
 Input projection|.
@@ -16,7 +18,6 @@ Input parameters|.
 ---|---
 `method` | string, transformation method: 'fixed' (default), 'manual', or 'auto'
 `scale`  | numeric, the scaling factor to use before the asinh transformation (only used when method is 'fixed'), default is 5
-`docker.image` | string, Docker image for flowVS (only used when method is 'auto'), default is 'ghcr.io/tercen/flowvs:latest'
 
 Output relations|.
 ---|---
@@ -38,39 +39,18 @@ Uses a global scale parameter for all channels. A scale of 5 is recommended for 
 Reads per-channel scale values from the row factor. Requires a second factor in the `row` dimension that provides the scaling value for each channel.
 
 **auto**
-Automatically estimates optimal cofactors per channel using the flowVS variance stabilization algorithm. This method finds the cofactor that minimizes variance heterogeneity across cell populations identified in each channel.
+Automatically estimates optimal cofactors per channel using the [flowVS](https://bioconductor.org/packages/flowVS/) variance stabilization algorithm from Bioconductor. This method finds the cofactor that minimizes variance heterogeneity across cell populations identified in each channel.
 
 The algorithm:
 1. Identifies cell populations as density peaks using kernel density estimation
 2. For each candidate cofactor, transforms data with `asinh(x/cofactor)`
 3. Calculates Bartlett's statistic to measure variance homogeneity across populations
-4. Uses golden section search over logarithmic cofactor space (10⁻¹ to 10¹⁰) to find the optimal cofactor that minimizes Bartlett's statistic
+4. Uses optimization to find the cofactor that minimizes Bartlett's statistic
 
 Requirements for auto method:
-- **Docker must be installed and running** on the system
-- The flowVS Docker image must be available (pulled automatically or manually with `docker pull ghcr.io/tercen/flowvs:latest`)
 - Channel names must be provided in the row projection
 - At least 100 data points per channel for reliable estimation
 - Multiple samples recommended for robust cofactor estimation
-
-##### Docker Requirements (auto method only)
-
-The `auto` method uses the [flowVS](https://bioconductor.org/packages/flowVS/) algorithm from Bioconductor, which runs inside a Docker container. This ensures exact reproducibility of the original flowVS implementation.
-
-**Prerequisites:**
-- Docker must be installed and running
-- Internet access to pull the image (first run only)
-
-**Docker image:**
-- Default: `ghcr.io/tercen/flowvs:latest`
-- Can be overridden with the `docker.image` parameter
-
-**Manual image pull (optional):**
-```bash
-docker pull ghcr.io/tercen/flowvs:latest
-```
-
-If Docker is not available, the operator will display an error message suggesting to use the `fixed` or `manual` methods instead.
 
 ##### References
 

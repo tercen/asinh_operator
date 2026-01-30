@@ -1,119 +1,53 @@
 library(tercenApi)
 library(tercen)
-library(data.table)
-library(dtplyr)
 library(dplyr, warn.conflicts = FALSE)
 library(tidyr)
 
 ctx <- tercenCtx()
 method <- ctx$op.value("method", type = as.character, default = "fixed")
 scale <- ctx$op.value("scale", type = as.integer, default = 5)
-docker_image <- ctx$op.value("docker.image", type = as.character, default = "ghcr.io/tercen/flowvs:latest")
 
 # =============================================================================
-# flowVS cofactor estimation using Docker container
-# The container runs the actual flowVS package from Bioconductor
-# Image: ghcr.io/tercen/flowvs (configurable via docker.image property)
+# flowVS cofactor estimation (runs inside flowVS container)
 # =============================================================================
 
-#' Estimate cofactors using flowVS Docker container
+#' Estimate cofactors using flowVS
 #' @param data_df data frame with columns: sample_id, and channel columns
 #' @param channels character vector of channel names to estimate
-#' @param docker_image Docker image to use
 #' @return data frame with columns: channel, cofactor
-estimate_cofactors_docker <- function(data_df, channels, docker_image) {
-  # Create temporary directory for input/output
-  tmp_dir <- tempdir()
-  input_file <- file.path(tmp_dir, "flowvs_input.csv")
-  output_file <- file.path(tmp_dir, "flowvs_output.csv")
-  script_file <- file.path(tmp_dir, "run_flowvs.R")
-
-  # Ensure cleanup happens even on error
-  on.exit({
-    if (file.exists(input_file)) unlink(input_file)
-    if (file.exists(output_file)) unlink(output_file)
-    if (file.exists(script_file)) unlink(script_file)
-  }, add = TRUE)
+estimate_cofactors_flowvs <- function(data_df, channels) {
+  suppressPackageStartupMessages({
+    library(flowVS)
+    library(flowCore)
+  })
 
   # Ensure sample_id column exists
   if (!"sample_id" %in% names(data_df)) {
     stop("data_df must have a 'sample_id' column")
   }
 
-  # Write input data
-  write.csv(data_df, input_file, row.names = FALSE)
-
-  # Build channels argument
-  channels_arg <- paste(channels, collapse = ",")
-
-  # Write R script to file (avoids escaping issues)
-  r_script <- sprintf('
-.libPaths(c("/app/renv/library/R-4.3/x86_64-pc-linux-gnu", .libPaths()))
-pdf(NULL)
-suppressPackageStartupMessages({
-  library(flowVS)
-  library(flowCore)
-})
-
-data <- read.csv("/data/flowvs_input.csv", stringsAsFactors = FALSE)
-channels <- strsplit("%s", ",")[[1]]
-
-sample_ids <- unique(data$sample_id)
-frames <- lapply(sample_ids, function(sid) {
-  subset_data <- data[data$sample_id == sid, channels, drop = FALSE]
-  flowFrame(as.matrix(subset_data))
-})
-names(frames) <- sample_ids
-fs <- flowSet(frames)
-
-cofactors <- estParamFlowVS(fs, channels)
-
-result <- data.frame(channel = channels, cofactor = cofactors)
-write.csv(result, "/data/flowvs_output.csv", row.names = FALSE)
-', channels_arg)
-
-  writeLines(r_script, script_file)
-
-  # Build Docker command using script file
-  docker_cmd <- sprintf(
-    'docker run --rm -w /tmp -v "%s:/data" --entrypoint /usr/local/bin/Rscript %s /data/run_flowvs.R',
-    tmp_dir,
-    docker_image
-  )
-
-  # Run Docker container with error handling
-  cat("Running flowVS via Docker container...\n")
-  cat("Docker image:", docker_image, "\n")
-  cat("Channels:", channels_arg, "\n")
-
-  result <- tryCatch({
-    output <- system(docker_cmd, intern = TRUE, ignore.stderr = FALSE)
-    attr(output, "status")
-  }, error = function(e) {
-    stop("Failed to run Docker container: ", e$message, "\n",
-         "Ensure the Docker image '", docker_image, "' is available. ",
-         "You can pull it with: docker pull ", docker_image)
+  # Create flowSet from data
+  sample_ids <- unique(data_df$sample_id)
+  frames <- lapply(sample_ids, function(sid) {
+    subset_data <- data_df[data_df$sample_id == sid, channels, drop = FALSE]
+    flowFrame(as.matrix(subset_data))
   })
+  names(frames) <- sample_ids
+  fs <- flowSet(frames)
 
-  exit_code <- if (is.null(result)) 0 else result
+  # Estimate cofactors using flowVS
+  cat("Estimating cofactors using flowVS...\n")
+  cat("Channels:", paste(channels, collapse = ", "), "\n")
+  cat("Samples:", length(sample_ids), "\n")
 
-  if (exit_code != 0) {
-    stop("Docker flowVS container failed with exit code: ", exit_code, "\n",
-         "Ensure the Docker image '", docker_image, "' is available and working.")
-  }
+  cofactors <- estParamFlowVS(fs, channels)
 
-  # Read output
-  if (!file.exists(output_file)) {
-    stop("flowVS output file not found. The Docker container may have failed silently. ",
-         "Check that the image '", docker_image, "' contains the flowVS package.")
-  }
-
-  cofactor_df <- read.csv(output_file, stringsAsFactors = FALSE)
+  result <- data.frame(channel = channels, cofactor = cofactors, stringsAsFactors = FALSE)
 
   cat("Estimated cofactors:\n")
-  print(cofactor_df)
+  print(result)
 
-  cofactor_df
+  result
 }
 
 # =============================================================================
@@ -121,7 +55,7 @@ write.csv(result, "/data/flowvs_output.csv", row.names = FALSE)
 # =============================================================================
 
 if (method == "auto") {
-  # Automatic cofactor estimation per channel using flowVS Docker container
+  # Automatic cofactor estimation per channel using flowVS
   if (length(ctx$rnames) < 1)
     stop("auto method requires channel names in row projection")
 
@@ -172,8 +106,8 @@ if (method == "auto") {
   # Remove rows with any NA values (incomplete cases)
   wide_data <- wide_data[complete.cases(wide_data), ]
 
-  # Estimate cofactors using Docker
-  cofactor_df <- estimate_cofactors_docker(wide_data, channels, docker_image)
+  # Estimate cofactors using flowVS
+  cofactor_df <- estimate_cofactors_flowvs(as.data.frame(wide_data), channels)
 
   # Convert to named vector for lookup
   cofactors <- setNames(cofactor_df$cofactor, cofactor_df$channel)
@@ -197,18 +131,17 @@ if (method == "auto") {
     stop("manual method requires a scaling value after channel name in projection")
 
   row_df <- ctx$rselect(ctx$rnames[[2]]) %>%
-    mutate(.ri = as.integer(row_number() - 1L)) %>%
-    lazy_dt()
+    mutate(.ri = as.integer(row_number() - 1L))
 
   scale_colname <- sym(ctx$rnames[[2]])
 
   ctx %>%
     select(.ri, .ci, .y) %>%
-    lazy_dt() %>%
+    as_tibble() %>%
     left_join(row_df, by = ".ri") %>%
     mutate(asinh = asinh(.y / !!scale_colname)) %>%
+    mutate(.ri = as.integer(.ri), .ci = as.integer(.ci)) %>%
     select(.ri, .ci, asinh) %>%
-    as_tibble() %>%
     ctx$addNamespace() %>%
     ctx$save()
 
@@ -216,10 +149,10 @@ if (method == "auto") {
   # Fixed global scale (default)
   ctx %>%
     select(.ri, .ci, .y) %>%
-    lazy_dt() %>%
-    mutate(asinh = asinh(.y / scale)) %>%
-    select(.ri, .ci, asinh) %>%
     as_tibble() %>%
+    mutate(asinh = asinh(.y / scale)) %>%
+    mutate(.ri = as.integer(.ri), .ci = as.integer(.ci)) %>%
+    select(.ri, .ci, asinh) %>%
     ctx$addNamespace() %>%
     ctx$save()
 }
