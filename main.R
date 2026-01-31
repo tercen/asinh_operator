@@ -1,7 +1,7 @@
 library(tercenApi)
 library(tercen)
+library(data.table)
 library(dplyr, warn.conflicts = FALSE)
-library(tidyr)
 
 ctx <- tercenCtx()
 method <- ctx$op.value("method", type = as.character, default = "fixed")
@@ -85,14 +85,14 @@ if (method == "auto") {
   channels <- unique(data_with_samples[[channel_colname]])
 
   # Pivot data to wide format for flowVS (each channel as a column)
-  wide_data <- data_with_samples %>%
+  # Using data.table::dcast instead of tidyr::pivot_wider
+  pivot_data <- data_with_samples %>%
     select(sample_id, .ci, !!sym(channel_colname), .y) %>%
     mutate(cell_id = row_number()) %>%
-    pivot_wider(
-      id_cols = c(sample_id, cell_id),
-      names_from = !!sym(channel_colname),
-      values_from = .y
-    ) %>%
+    as.data.table()
+
+  wide_data <- dcast(pivot_data, sample_id + cell_id ~ get(channel_colname),
+                     value.var = ".y") %>%
     select(-cell_id)
 
   # Remove rows with any NA values (incomplete cases)
