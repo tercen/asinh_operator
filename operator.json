@@ -11,7 +11,6 @@
   "urls": [
     "https://github.com/tercen/asinh_operator"
   ],
-  "container": "ghcr.io/tercen/flowvs:latest",
   "properties": [
     {
       "kind": "EnumeratedProperty",
@@ -39,17 +38,17 @@
             "kind": "MetaFactor",
             "name": "Row",
             "type": "",
-            "description": "Channel names for asinh transformation",
+            "description": "Optional row factor (second factor can provide per-channel scale values)",
             "ontologyMapping": "variable",
             "crosstabMapping": "row",
-            "cardinality": "1..n",
+            "cardinality": "0..n",
             "factors": []
           },
           {
             "kind": "MetaFactor",
             "name": "Column",
             "type": "",
-            "description": "Observations (cells/events)",
+            "description": "Optional column factor",
             "ontologyMapping": "observation",
             "crosstabMapping": "column",
             "cardinality": "0..n",
