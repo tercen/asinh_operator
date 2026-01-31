@@ -8,43 +8,35 @@ method <- ctx$op.value("method", type = as.character, default = "fixed")
 scale <- ctx$op.value("scale", type = as.integer, default = 5)
 
 # =============================================================================
-# flowVS cofactor estimation (runs inside flowVS container)
+# Standalone flowVS implementation for automatic cofactor estimation
+# Based on: Azad et al. (2016) "flowVS: Channel-Specific Variance Stabilization
+# in Flow Cytometry", BMC Bioinformatics
+# This implementation does not require the flowVS/flowCore/flowStats packages.
 # =============================================================================
 
-#' Estimate cofactors using flowVS
+# Source the standalone flowVS implementation
+source("flowvs_standalone.R")
+
+#' Estimate cofactors using standalone flowVS implementation
 #' @param data_df data frame with columns: sample_id, and channel columns
 #' @param channels character vector of channel names to estimate
 #' @return data frame with columns: channel, cofactor
 estimate_cofactors_flowvs <- function(data_df, channels) {
-  suppressPackageStartupMessages({
-    library(flowVS)
-    library(flowCore)
-  })
-
   # Ensure sample_id column exists
   if (!"sample_id" %in% names(data_df)) {
     stop("data_df must have a 'sample_id' column")
   }
 
-  # Create flowSet from data
-  sample_ids <- unique(data_df$sample_id)
-  frames <- lapply(sample_ids, function(sid) {
-    subset_data <- data_df[data_df$sample_id == sid, channels, drop = FALSE]
-    flowFrame(as.matrix(subset_data))
-  })
-  names(frames) <- sample_ids
-  fs <- flowSet(frames)
-
-  # Estimate cofactors using flowVS
-  cat("Estimating cofactors using flowVS...\n")
+  cat("Estimating cofactors using flowVS algorithm...\n")
   cat("Channels:", paste(channels, collapse = ", "), "\n")
-  cat("Samples:", length(sample_ids), "\n")
+  cat("Samples:", length(unique(data_df$sample_id)), "\n")
 
-  cofactors <- estParamFlowVS(fs, channels)
+  # Use standalone implementation
+  cofactors <- est_param_flowvs(data_df, channels, verbose = TRUE)
 
   result <- data.frame(channel = channels, cofactor = cofactors, stringsAsFactors = FALSE)
 
-  cat("Estimated cofactors:\n")
+  cat("\nEstimated cofactors:\n")
   print(result)
 
   result
