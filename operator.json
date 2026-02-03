@@ -24,6 +24,18 @@
       "name": "scale",
       "defaultValue": "5",
       "description": "The scaling factor to use before the transformation (only used when method is 'fixed')"
+    },
+    {
+      "kind": "StringProperty",
+      "name": "signifLevel",
+      "defaultValue": "0.05",
+      "description": "Statistical significance threshold for peak detection (only used when method is 'auto'). Lower values are stricter, detecting fewer peaks. Range: 0.01-0.10"
+    },
+    {
+      "kind": "StringProperty",
+      "name": "bwCorr",
+      "defaultValue": "1.0",
+      "description": "Bandwidth correction factor for peak detection (only used when method is 'auto'). Higher values apply more smoothing, detecting fewer peaks. Use 1.1 to match flowVS more closely on borderline cases. Range: 0.8-1.5"
     }
   ]
 }

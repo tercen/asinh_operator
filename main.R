@@ -6,6 +6,8 @@ library(dplyr, warn.conflicts = FALSE)
 ctx <- tercenCtx()
 method <- ctx$op.value("method", type = as.character, default = "fixed")
 scale <- ctx$op.value("scale", type = as.integer, default = 5)
+signifLevel <- ctx$op.value("signifLevel", type = as.double, default = 0.05)
+bwCorr <- ctx$op.value("bwCorr", type = as.double, default = 1.0)
 
 # =============================================================================
 # Standalone flowVS implementation for automatic cofactor estimation
@@ -20,8 +22,10 @@ source("flowvs_standalone.R")
 #' Estimate cofactors using standalone flowVS implementation
 #' @param data_df data frame with columns: sample_id, and channel columns
 #' @param channels character vector of channel names to estimate
+#' @param signifLevel significance level for peak detection (default 0.05)
+#' @param bwCorr bandwidth correction factor (default 1.0)
 #' @return data frame with columns: channel, cofactor
-estimate_cofactors_flowvs <- function(data_df, channels) {
+estimate_cofactors_flowvs <- function(data_df, channels, signifLevel = 0.05, bwCorr = 1.0) {
   # Ensure sample_id column exists
   if (!"sample_id" %in% names(data_df)) {
     stop("data_df must have a 'sample_id' column")
@@ -30,9 +34,11 @@ estimate_cofactors_flowvs <- function(data_df, channels) {
   cat("Estimating cofactors using flowVS algorithm...\n")
   cat("Channels:", paste(channels, collapse = ", "), "\n")
   cat("Samples:", length(unique(data_df$sample_id)), "\n")
+  cat("Settings: signifLevel =", signifLevel, ", bwCorr =", bwCorr, "\n")
 
   # Use standalone implementation
-  cofactors <- est_param_flowvs(data_df, channels, verbose = TRUE)
+  cofactors <- est_param_flowvs(data_df, channels, verbose = TRUE,
+                                 signifLevel = signifLevel, bwCorr = bwCorr)
 
   result <- data.frame(channel = channels, cofactor = cofactors, stringsAsFactors = FALSE)
 
@@ -99,7 +105,8 @@ if (method == "auto") {
   wide_data <- wide_data[complete.cases(wide_data), ]
 
   # Estimate cofactors using flowVS
-  cofactor_df <- estimate_cofactors_flowvs(as.data.frame(wide_data), channels)
+  cofactor_df <- estimate_cofactors_flowvs(as.data.frame(wide_data), channels,
+                                            signifLevel = signifLevel, bwCorr = bwCorr)
 
   # Convert to named vector for lookup
   cofactors <- setNames(cofactor_df$cofactor, cofactor_df$channel)
