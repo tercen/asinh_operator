@@ -1,0 +1,117 @@
+{
+  "name": "asinh (Rust)",
+  "description": "Arcsinh transform with a fixed or per-channel cofactor. Rust port of tercen/asinh_operator (fixed and manual methods).",
+  "tags": [
+    "transform",
+    "flow cytometry",
+    "arcsinh",
+    "rust"
+  ],
+  "communicationProtocol": "grpc",
+  "authors": [
+    "tercen"
+  ],
+  "urls": [
+    "https://github.com/tercen/asinh_rust_operator"
+  ],
+  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.0",
+  "properties": [
+    {
+      "kind": "EnumeratedProperty",
+      "name": "method",
+      "defaultValue": "fixed",
+      "values": [
+        "fixed",
+        "manual"
+      ],
+      "description": "fixed: one cofactor for every channel, from `scale`. manual: a cofactor per channel, taken from the second row factor."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "scale",
+      "defaultValue": 5,
+      "description": "Cofactor used by the fixed method: asinh(value / scale)."
+    }
+  ],
+  "operatorSpec": {
+    "kind": "OperatorSpec",
+    "ontologyUri": "https://tercen.com/_ontology/tercen",
+    "ontologyVersion": "0.0.1",
+    "inputSpecs": [
+      {
+        "kind": "CrosstabSpec",
+        "metaFactors": [
+          {
+            "kind": "MetaFactor",
+            "name": "Row",
+            "type": "",
+            "description": "Channel (or variable) name. The manual method needs a second row factor holding that channel's cofactor.",
+            "ontologyMapping": "variable",
+            "crosstabMapping": "row",
+            "cardinality": "0..n",
+            "factors": []
+          },
+          {
+            "kind": "MetaFactor",
+            "name": "Column",
+            "type": "",
+            "description": "Event or observation identifier.",
+            "ontologyMapping": "observation",
+            "crosstabMapping": "column",
+            "cardinality": "0..n",
+            "factors": []
+          }
+        ],
+        "axis": [
+          {
+            "kind": "AxisSpec",
+            "metaFactors": [
+              {
+                "kind": "MetaFactor",
+                "name": "Measurement",
+                "type": "double",
+                "description": "Values to transform",
+                "ontologyMapping": "measurement",
+                "crosstabMapping": "y",
+                "cardinality": "1",
+                "factors": []
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputSpecsV2": [
+      {
+        "kind": "OperatorJoinSpec",
+        "joinOperators": [
+          {
+            "kind": "JoinOperator",
+            "joinType": "left",
+            "leftPair": {
+              "kind": "ColumnPair",
+              "lColumns": [
+                "Row",
+                "Column"
+              ],
+              "rColumns": [
+                "Row",
+                "Column"
+              ]
+            },
+            "rightRelation": {
+              "kind": "TableRelation",
+              "attributes": [
+                {
+                  "kind": "Attribute",
+                  "name": "asinh",
+                  "type": "double"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
