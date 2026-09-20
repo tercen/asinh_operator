@@ -65,6 +65,12 @@
     },
     {
       "kind": "DoubleProperty",
+      "name": "cofactor_floor",
+      "defaultValue": 0,
+      "description": "auto only. Refuse a cofactor below this multiple of the negative population's spread; 0 disables it. 2.5 is the convention used when this panel's cofactors were checked. Off by default so the estimate reproduces flowVS."
+    },
+    {
+      "kind": "DoubleProperty",
       "name": "bwCorr",
       "defaultValue": 1.0,
       "description": "auto only. flowVS bandwidth correction; 1.0 matches Tercen's R implementation, 1.1 is closer to the original C."
@@ -182,7 +188,27 @@
                       },
                       {
                         "kind": "Attribute",
-                        "name": "unstable",
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "flowvs_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "sigma_neg_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "runner_up_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "runner_up_bartlett",
                         "type": "double"
                       },
                       {

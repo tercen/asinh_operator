@@ -119,6 +119,7 @@ fn operator_spec_matches_the_result_columns() {
         "estimate_max_cells",
         "seed",
         "threads",
+        "cofactor_floor",
         "signifLevel",
         "bwCorr",
     ] {
@@ -176,14 +177,20 @@ fn operator_spec_matches_the_result_columns() {
     assert_eq!(auto_rels[0], vec!["asinh".to_string()]);
     assert_eq!(
         auto_rels[1],
-        vec![
-            "channel".to_string(),
-            "cofactor".to_string(),
-            "bartlett".to_string(),
-            "unstable".to_string(),
-            "cells_used".to_string(),
-            "seed".to_string()
-        ],
+        [
+            "channel",
+            "cofactor",
+            "bartlett",
+            "status",
+            "flowvs_cofactor",
+            "sigma_neg_cofactor",
+            "runner_up_cofactor",
+            "runner_up_bartlett",
+            "cells_used",
+            "seed"
+        ]
+        .map(String::from)
+        .to_vec(),
         "the declared cofactor table must match what output::write_cofactor_table writes"
     );
 

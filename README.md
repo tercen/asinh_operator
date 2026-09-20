@@ -19,6 +19,7 @@ operator does.
 | `estimate_max_cells` | Double | 3000 | `auto`: cells per sample used for estimation. |
 | `seed` | Double | 1 | `auto`: seed for that subsample, so the estimate repeats. |
 | `threads` | Double | 4 | `auto`: channels estimated at once. |
+| `cofactor_floor` | Double | 0 | `auto`: refuse a cofactor below this multiple of the negative population's spread; 0 is off, 2.5 is the convention used when this panel was checked. |
 | `signifLevel` | Double | 0.05 | `auto`: flowVS peak-detection significance. |
 | `bwCorr` | Double | 1.0 | `auto`: flowVS bandwidth correction. |
 
@@ -27,9 +28,10 @@ operator does.
 One column, `<namespace>.asinh`, one value per cell, carried on `.ri` / `.ci` — the same attribute
 name the R operator declares, so a workflow can swap one for the other without re-projecting.
 
-`auto` emits a second table, `Cofactors`: the channel, the cofactor used, Bartlett's statistic, an
-unstable flag for channels where flowVS found nothing to stabilise, and the subsample size and
-seed. **Review it, then freeze it**: feed it back as the cofactor row factor with
+`auto` emits a second table, `Cofactors`: the channel, the cofactor used, Bartlett's statistic, a
+status of `resolved`, `fragile`, `floored` or `unstable`, what flowVS itself returned, the
+cofactor implied by the negative population's spread, the runner-up from the search, and the
+subsample size and seed. **Review it, then freeze it**: feed it back as the cofactor row factor with
 `method = manual`. An automatic estimate changes with whatever data flows through the step, so
 timepoints estimated separately are not comparable, and the point of a study-wide cofactor table
 is that they are.

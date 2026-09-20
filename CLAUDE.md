@@ -125,10 +125,23 @@ saw on the study panel, where flowVS collapsed on TCRγδ, CD56 and CD45. The pr
 negative-spread floor in `flowvs-rust-plan.md` §5 — a cofactor below the spread of the negative
 population cannot be stabilising anything — and it belongs in the crate, not here.
 
-What this operator should add meanwhile is the **runner-up**: the search already computes a best
-cofactor per logarithmic interval and keeps only the winner. When the second-best objective is
-nearly as good but its cofactor is far away, the answer was a coin toss, and saying so costs
-nothing.
+Both guards are now implemented in the crate and surfaced here.
+
+**The floor** (`cofactor_floor`, a multiple of σ_neg, **0 = off**) refuses a cofactor below the
+negative population's spread and uses `factor · σ_neg` instead. Checked twice: on the real
+three-channel case the σ_neg values come out at 3908, 4019 and 2917 against flowVS's 6450, 4767
+and 6317, so nothing is floored and the published answers stand; on the synthetic set every
+channel was floored from about 1–4 up to about 75, which is 2.5 × the 30-unit negative spread
+that data was generated with.
+
+**The runner-up** is free — the search computes a best cofactor per interval and kept only the
+winner — but weaker than it sounds. On the degenerate synthetic case it reported *resolved*,
+because the second-best interval was genuinely worse. It catches a different failure: two
+comparable minima far apart.
+
+A channel now carries a `status` of `resolved`, `fragile`, `floored` or `unstable`, and the
+Cofactors table carries what flowVS said, the σ_neg cofactor and the runner-up beside the number
+that was used. Anything but `resolved` is also a warning in the task log.
 
 ## The operator spec
 

@@ -226,6 +226,13 @@ impl Plan {
             signif_level: s.signif_level,
             bw_corr: s.bw_corr,
             threads: s.threads,
+            floor: if s.cofactor_floor > 0.0 {
+                flowvs::estimate::Floor::SigmaNeg {
+                    factor: s.cofactor_floor,
+                }
+            } else {
+                flowvs::estimate::Floor::None
+            },
         };
         let t = std::time::Instant::now();
         let est = flowvs::estimate::estimate_cofactors(&channels, opts);
@@ -238,19 +245,25 @@ impl Plan {
         let mut per_row = Vec::with_capacity(self.n_channels);
         let mut table = Vec::with_capacity(self.n_channels);
         for (ri, e) in est.iter().enumerate() {
-            let unstable = e.objective >= flowvs::estimate::MAX_BT || !e.cofactor.is_finite();
-            // An unstable channel gets the fixed scale rather than a number flowVS did not
-            // really find; the flag and the statistic say so in the output.
-            let cofactor = if unstable || e.cofactor <= 0.0 {
-                s.scale
-            } else {
-                e.cofactor
-            };
-            if unstable {
+            // The crate already applied the floor where one exists, so a cofactor is only
+            // hopeless when it had nothing to fall back on either.
+            let usable = e.cofactor.is_finite() && e.cofactor > 0.0;
+            let cofactor = if usable { e.cofactor } else { s.scale };
+            if !usable {
                 tracing::warn!(
                     channel = %self.channel_names[ri],
-                    "flowVS found no usable populations; falling back to scale = {}",
+                    "flowVS found no usable populations and there is no negative spread to fall \
+                     back on; using scale = {}",
                     s.scale
+                );
+            }
+            if e.status != flowvs::estimate::Status::Resolved {
+                tracing::warn!(
+                    channel = %self.channel_names[ri],
+                    status = e.status.as_str(),
+                    flowvs = e.flowvs_cofactor,
+                    used = cofactor,
+                    "this channel's cofactor needs review"
                 );
             }
             per_row.push(cofactor);
@@ -258,7 +271,11 @@ impl Plan {
                 channel: self.channel_names[ri].clone(),
                 cofactor,
                 objective: e.objective,
-                unstable,
+                status: e.status.as_str().to_string(),
+                flowvs_cofactor: e.flowvs_cofactor,
+                sigma_neg_cofactor: e.sigma_neg_cofactor.unwrap_or(f64::NAN),
+                runner_up_cofactor: e.runner_up.map(|(c, _)| c).unwrap_or(f64::NAN),
+                runner_up_objective: e.runner_up.map(|(_, b)| b).unwrap_or(f64::NAN),
                 cells_used: self.cells.min(i32::MAX as usize) as i32,
                 seed: s.seed.min(i32::MAX as u64) as i32,
             });

@@ -60,11 +60,20 @@ pub const COFACTORS: &str = "Cofactors";
 #[derive(Debug, Clone)]
 pub struct CofactorRow {
     pub channel: String,
+    /// The cofactor applied to this channel.
     pub cofactor: f64,
     /// Bartlett's statistic at that cofactor. Large means flowVS found little to stabilise.
     pub objective: f64,
-    /// True when the estimate rests on nothing: fewer than two usable populations.
-    pub unstable: bool,
+    /// `resolved`, `fragile`, `floored` or `unstable` — see `flowvs::estimate::Status`.
+    pub status: String,
+    /// What flowVS itself returned, before any floor.
+    pub flowvs_cofactor: f64,
+    /// `2.5 × σ_neg` when the channel has a negative population, else NaN.
+    pub sigma_neg_cofactor: f64,
+    /// The best cofactor from another interval of the search, and its objective, else NaN. A
+    /// close second at a distant cofactor means the search chose between two minima.
+    pub runner_up_cofactor: f64,
+    pub runner_up_objective: f64,
     /// Cells per sample the estimate used, and the seed that chose them.
     pub cells_used: i32,
     pub seed: i32,
@@ -149,7 +158,23 @@ pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow
             ty: "double",
         },
         ColSpec {
-            name: "unstable",
+            name: "status",
+            ty: "string",
+        },
+        ColSpec {
+            name: "flowvs_cofactor",
+            ty: "double",
+        },
+        ColSpec {
+            name: "sigma_neg_cofactor",
+            ty: "double",
+        },
+        ColSpec {
+            name: "runner_up_cofactor",
+            ty: "double",
+        },
+        ColSpec {
+            name: "runner_up_bartlett",
             ty: "double",
         },
         ColSpec {
@@ -180,22 +205,25 @@ pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow
     w.key("columns")?;
     w.list(cols.len())?;
 
+    let f64_col =
+        |w: &mut TsonWriter<W>, i: usize, f: &dyn Fn(&CofactorRow) -> f64| -> Result<()> {
+            write_column_header(w, &cols[i], n)?;
+            w.f64_list(&rows.iter().map(f).collect::<Vec<_>>())?;
+            Ok(())
+        };
     write_column_header(w, &cols[0], n)?;
     w.str_list(&rows.iter().map(|r| r.channel.as_str()).collect::<Vec<_>>())?;
-    write_column_header(w, &cols[1], n)?;
-    w.f64_list(&rows.iter().map(|r| r.cofactor).collect::<Vec<_>>())?;
-    write_column_header(w, &cols[2], n)?;
-    w.f64_list(&rows.iter().map(|r| r.objective).collect::<Vec<_>>())?;
+    f64_col(w, 1, &|r| r.cofactor)?;
+    f64_col(w, 2, &|r| r.objective)?;
     write_column_header(w, &cols[3], n)?;
-    w.f64_list(
-        &rows
-            .iter()
-            .map(|r| if r.unstable { 1.0 } else { 0.0 })
-            .collect::<Vec<_>>(),
-    )?;
-    write_column_header(w, &cols[4], n)?;
+    w.str_list(&rows.iter().map(|r| r.status.as_str()).collect::<Vec<_>>())?;
+    f64_col(w, 4, &|r| r.flowvs_cofactor)?;
+    f64_col(w, 5, &|r| r.sigma_neg_cofactor)?;
+    f64_col(w, 6, &|r| r.runner_up_cofactor)?;
+    f64_col(w, 7, &|r| r.runner_up_objective)?;
+    write_column_header(w, &cols[8], n)?;
     w.i32_list(&rows.iter().map(|r| r.cells_used).collect::<Vec<_>>())?;
-    write_column_header(w, &cols[5], n)?;
+    write_column_header(w, &cols[9], n)?;
     w.i32_list(&rows.iter().map(|r| r.seed).collect::<Vec<_>>())?;
     Ok(())
 }

@@ -54,9 +54,12 @@ check saw on the study panel. See CLAUDE.md for the numbers and the fix.
   path has never run against Tercen at all.
 - **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
   unit test should be regenerated from a Studio run of *this* operator once it installs.
-- **`auto` reports no fragility signal.** The cheap one is the search's runner-up interval, which
-  is already computed and thrown away; the principled one is the negative-spread floor, which is
-  the crate's job (`flowvs-rust-plan.md` §5).
+- ~~`auto` reports no fragility signal~~ — done. The cofactor table carries a status
+  (resolved / fragile / floored / unstable), what flowVS said, the σ_neg cofactor and the
+  runner-up. The floor is opt-in via `cofactor_floor`; 2.5 is the cofactor check's convention.
+- **Thresholds are uncalibrated.** `fragile` fires when a runner-up is within 10 % on objective
+  and more than 1.5× away in cofactor. Those are starting values; the 32-channel cofactor check
+  is the set to calibrate them on.
 - **`manual` mode has no end-to-end test**, only a unit test, because the R operator ships no
   fixture for it. It is the mode CYTOSHRINK will actually use, with a cofactor table as the
   second row factor.

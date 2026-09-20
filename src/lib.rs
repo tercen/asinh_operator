@@ -422,7 +422,11 @@ fn report_cofactors(rep: &Reporter, table: &[output::CofactorRow]) {
             "{}: cofactor {:.1}{}",
             row.channel,
             row.cofactor,
-            if row.unstable { " (unstable)" } else { "" }
+            if row.status == "resolved" {
+                String::new()
+            } else {
+                format!(" ({})", row.status)
+            }
         ));
     }
 }

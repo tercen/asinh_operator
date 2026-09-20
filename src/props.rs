@@ -35,6 +35,11 @@ pub struct Settings {
     pub signif_level: f64,
     /// flowVS bandwidth correction (1.0 = the R port's default).
     pub bw_corr: f64,
+    /// `factor · σ_neg` below which a flowVS cofactor is refused; 0 disables the floor.
+    ///
+    /// Off by default, because `flowvs-rust-plan.md` §5 wants every improvement opt-in so the
+    /// defaults still reproduce flowVS. 2.5 is the convention the cofactor check used.
+    pub cofactor_floor: f64,
     /// Which column factor identifies the sample for estimation. Empty means the first one.
     ///
     /// It matters: flowVS pools populations across samples, and in a cytometry projection the
@@ -52,6 +57,7 @@ impl Default for Settings {
             threads: 4,
             signif_level: 0.05,
             bw_corr: 1.0,
+            cofactor_floor: 0.0,
             sample_factor: String::new(),
         }
     }
@@ -121,6 +127,13 @@ pub fn settings_from_ctx(ctx: &ContextBase) -> Result<Settings> {
         threads: threads.max(0.0) as usize,
         signif_level,
         bw_corr,
+        cofactor_floor: {
+            let v = num("cofactor_floor", 0.0)?;
+            if v < 0.0 {
+                bail!("property 'cofactor_floor' must be >= 0, got {v}");
+            }
+            v
+        },
         sample_factor: pr.get_string("sample_factor", "").trim().to_string(),
     })
 }
