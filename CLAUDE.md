@@ -96,6 +96,28 @@ events while the sample is something like `filename`.
 this repository alone. Drop the feature once that crate has a remote: shipping an image where a
 declared method sometimes exists is worse than either alternative.
 
+## What the first auto run showed about flowVS
+
+On a synthetic eight-channel set (four samples, 5,000 events, a 70/30 mixture per channel), the
+same channel estimates a cofactor of **2.0 from 3,000 cells per sample and 99 from 5,000**. The
+objective is bimodal, both minima are real, and Bartlett's statistic is small and healthy-looking
+at both, so nothing in the output says the answer was a coin toss. CD8 did the opposite: 90 at
+both sizes.
+
+Two consequences.
+
+`estimate_max_cells` is a **scientific** parameter, not a performance knob. It belongs in the
+Cofactors table, which is why it is written there with the seed.
+
+The `unstable` flag as implemented is too weak. It only fires when flowVS finds fewer than two
+usable populations, which is total failure; it does not fire when the search lands in a different
+local minimum. The honest diagnostic is to estimate twice on disjoint subsamples and report the
+spread, which costs one more pass over the same cells. That is worth doing before anyone freezes
+a table from this operator, and it is the guardrail `flowvs-rust-plan.md` §5 gestures at.
+
+This is not a Rust artefact: the crate reproduces the R implementation's published cofactors to
+1e-15, and R would swing the same way on the same subsamples.
+
 ## The operator spec
 
 `operator.json`'s `operatorSpec` is mirrored from the R operator, including the `axis` entry that

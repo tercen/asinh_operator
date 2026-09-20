@@ -27,14 +27,32 @@ a budget, three passes over the crosstab where one does, `auto` reading the inpu
 mode, a hard-coded sample factor, and shared modules that had already diverged from read_fcs.
 `CLAUDE.md` has the reasoning. Both cargo configurations build, test and lint clean.
 
+## First runs against Tercen, 2026-09-20
+
+Studio 1.1.8, via `dev/setup_crabs.py`.
+
+| run | result |
+|---|---|
+| `fixed` on the R operator's crabs fixture, 1,000 cells | server ingested and linked it; the exported table matches the R golden to **2.2e-16** |
+| `auto` on a synthetic 8-channel set, 160,000 cells | ran in 1.0 s, peak RSS 28.5 MB; the Cofactors table landed with all six columns |
+
+Two bugs came out of the first run, both about talking to the server rather than arithmetic: an
+unbounded chunk loop (fixed by counting rows against the schema) and the wrong TSON layout for
+streamed tables (both layouts are accepted now). Neither was reachable from a unit test.
+
+The `auto` run also exposed something about flowVS rather than the operator: the estimate can
+swing between 2 and 99 for the same channel depending on the subsample size, with a healthy
+Bartlett statistic at both. See CLAUDE.md. **Do not freeze a cofactor table from this operator
+until the stability check exists.**
+
 ## What is not done
 
-- **It has never run against Tercen.** No dev run on Studio, so no measured peak memory: the
-  memory model books a **constant 600 MB** from the design (the collect path is capped at 20 M
-  cells = 320 MB of buffers) rather than from a measurement. Refit it after the first real run.
+- **Memory is still unmeasured at scale.** The runs above peaked at 11.6 MB and 28.5 MB, which
+  says nothing about the 20 M-cell cap the 600 MB booking is designed around, and the streaming
+  path has never run against Tercen at all.
 - **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
   unit test should be regenerated from a Studio run of *this* operator once it installs.
-- **`auto` has no end-to-end test against Tercen**, only unit tests and the crate's own parity.
+- **`auto` has no *stability* check**: see above. The path itself now works end to end.
 - **`manual` mode has no end-to-end test**, only a unit test, because the R operator ships no
   fixture for it. It is the mode CYTOSHRINK will actually use, with a cofactor table as the
   second row factor.

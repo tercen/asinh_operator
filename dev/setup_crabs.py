@@ -20,7 +20,12 @@ client.userService.tercenClient.token = token
 client.httpClient.authorization = token
 wf = client.workflowService.get(wf_id)
 
-ROW, COL, Y = "variable", "observation", "measurement"
+ROW = os.environ.get("DEV_ROW", "variable")
+COL = os.environ.get("DEV_COL", "observation")
+Y = os.environ.get("DEV_Y", "measurement")
+COL_TYPE = os.environ.get("DEV_COL_TYPE", "double")
+ROW_TYPE = os.environ.get("DEV_ROW_TYPE", "string")
+COL2 = os.environ.get("DEV_COL2", "")  # a second column factor, e.g. the sample
 
 def rect(x, y, w=200.0, h=55.0):
     r = m.Rectangle(); r.topLeft = m.Point(); r.topLeft.x = x; r.topLeft.y = y
@@ -38,7 +43,7 @@ def ctable(factors):
     t.graphicalFactors = factors; t.rectangleSelections = []; return t
 
 # --- TableStep over the uploaded schema -------------------------------------------------------
-ts = m.TableStep(); ts.id = str(uuid.uuid4()); ts.name = "crabs-long"; ts.groupId = ""; ts.description = ""
+ts = m.TableStep(); ts.id = str(uuid.uuid4()); ts.name = os.environ.get("DEV_TABLE_NAME", "crabs-long"); ts.groupId = ""; ts.description = ""
 op = m.OutputPort(); op.id = str(uuid.uuid4()); op.name = "table"; op.linkType = "relation"
 ts.inputs = []; ts.outputs = [op]; ts.rectangle = rect(100.0, 100.0)
 ts.state = m.StepState(); ts.state.taskId = ""; ts.state.taskState = m.DoneState()
@@ -55,8 +60,10 @@ ds.state = m.StepState(); ds.state.taskId = ""; ds.state.taskState = m.InitState
 
 ct = m.Crosstab(); ct.taskId = ""
 ct.axis = m.XYAxisList(); ct.axis.rectangleSelections = []; ct.axis.xyAxis = []
-ct.columnTable = ctable([gf(COL, "double")])
-ct.rowTable = ctable([gf(ROW, "string")])
+col_factors = [gf(COL2, "string")] if COL2 else []
+col_factors.append(gf(COL, COL_TYPE))
+ct.columnTable = ctable(col_factors)
+ct.rowTable = ctable([gf(ROW, ROW_TYPE)])
 ct.filters = m.Filters(); ct.filters.removeNaN = False; ct.filters.namedFilters = []
 settings = m.OperatorSettings(); settings.namespace = "ds0"; settings.environment = []
 ref = m.OperatorRef(); ref.name = "asinh_rust_operator"; ref.version = "dev"
@@ -82,8 +89,8 @@ wf = client.workflowService.get(wf_id)
 ds = next(s for s in wf.steps if s.id == ds.id)
 q = m.CubeQuery()
 q.relation = ts.model.relation
-q.colColumns = [factor(COL, "double")]
-q.rowColumns = [factor(ROW, "string")]
+q.colColumns = ([factor(COL2, "string")] if COL2 else []) + [factor(COL, COL_TYPE)]
+q.rowColumns = [factor(ROW, ROW_TYPE)]
 aq = m.CubeAxisQuery(); aq.chartType = "point"; aq.pointSize = 4
 aq.xAxis = factor("", "string")
 aq.yAxis = factor(Y, "double")
