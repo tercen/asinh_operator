@@ -35,6 +35,11 @@ pub struct Settings {
     pub signif_level: f64,
     /// flowVS bandwidth correction (1.0 = the R port's default).
     pub bw_corr: f64,
+    /// Which column factor identifies the sample for estimation. Empty means the first one.
+    ///
+    /// It matters: flowVS pools populations across samples, and in a cytometry projection the
+    /// columns are events while the sample is a factor like `filename`, which need not be first.
+    pub sample_factor: String,
 }
 
 impl Default for Settings {
@@ -47,6 +52,7 @@ impl Default for Settings {
             threads: 4,
             signif_level: 0.05,
             bw_corr: 1.0,
+            sample_factor: String::new(),
         }
     }
 }
@@ -115,6 +121,7 @@ pub fn settings_from_ctx(ctx: &ContextBase) -> Result<Settings> {
         threads: threads.max(0.0) as usize,
         signif_level,
         bw_corr,
+        sample_factor: pr.get_string("sample_factor", "").trim().to_string(),
     })
 }
 

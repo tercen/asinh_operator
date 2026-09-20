@@ -162,16 +162,29 @@ pub async fn row_labels(ctx: &ContextBase) -> Result<Vec<String>> {
     column_as_strings(&bytes, &name)
 }
 
-/// A group index per column, taken from the **first** column factor: the sample each event
-/// belongs to. Returns all-zero (one group) when the projection has no column factor, which is
-/// the useful reading when columns are individual events.
-pub async fn column_groups(ctx: &ContextBase) -> Result<Vec<usize>> {
+/// A group index per column: the sample each event belongs to.
+///
+/// `wanted` names the column factor to group by; empty takes the first, as the R operator does.
+/// Returns an empty vector (one group) when there is no column factor at all, which is the
+/// useful reading when columns are individual events.
+pub async fn column_groups(ctx: &ContextBase, wanted: &str) -> Result<Vec<usize>> {
     let names = ctx
         .cnames()
         .await
         .map_err(|e| anyhow!("read column factor names: {e}"))?;
-    let Some(name) = names.first().cloned() else {
-        return Ok(Vec::new());
+    let name = if wanted.is_empty() {
+        match names.first().cloned() {
+            Some(n) => n,
+            None => return Ok(Vec::new()),
+        }
+    } else {
+        names
+            .iter()
+            .find(|n| n.as_str() == wanted || n.ends_with(&format!(".{wanted}")))
+            .cloned()
+            .ok_or_else(|| {
+                anyhow!("column factor '{wanted}' is not projected (columns are {names:?})")
+            })?
     };
     let bytes = ctx
         .streamer()

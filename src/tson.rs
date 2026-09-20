@@ -146,6 +146,13 @@ impl<W: Write> TsonWriter<W> {
             Ok(())
         }
     }
+    /// Append already-encoded little-endian values to the current list.
+    ///
+    /// Used to pour a column that was spilled to a temporary file into the result without
+    /// decoding it again: the spill file holds exactly the bytes TSON wants.
+    pub fn raw(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.put(bytes)
+    }
     pub fn i32_list(&mut self, v: &[i32]) -> io::Result<()> {
         self.i32_list_header(v.len())?;
         self.i32_chunk(v)

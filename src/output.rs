@@ -26,9 +26,17 @@ pub struct ColSpec<'a> {
     pub ty: &'a str, // "double" | "int32"
 }
 
-/// The three columns of the result, in the order R saves them.
+/// The three columns of the result.
+///
+/// The value comes **first** so the streaming path can write it straight through while it reads
+/// the crosstab, and spill only the two index columns. Columns are addressed by name, so the
+/// order is ours to choose; choosing it this way turns three passes over the input into one.
 pub fn result_columns(namespace: &str) -> [ColSpec<'_>; 3] {
     [
+        ColSpec {
+            name: namespace,
+            ty: "double",
+        },
         ColSpec {
             name: ".ri",
             ty: "int32",
@@ -36,10 +44,6 @@ pub fn result_columns(namespace: &str) -> [ColSpec<'_>; 3] {
         ColSpec {
             name: ".ci",
             ty: "int32",
-        },
-        ColSpec {
-            name: namespace,
-            ty: "double",
         },
     ]
 }

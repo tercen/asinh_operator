@@ -22,15 +22,52 @@
       "defaultValue": "fixed",
       "values": [
         "fixed",
-        "manual"
+        "manual",
+        "auto"
       ],
-      "description": "fixed: one cofactor for every channel, from `scale`. manual: a cofactor per channel, taken from the second row factor."
+      "description": "fixed: one cofactor for every channel, from `scale`. manual: a cofactor per channel from the second row factor. auto: estimate one per channel with flowVS and emit them as a Cofactors table."
     },
     {
       "kind": "DoubleProperty",
       "name": "scale",
       "defaultValue": 5,
-      "description": "Cofactor used by the fixed method: asinh(value / scale)."
+      "description": "Cofactor for the fixed method, and the fallback for a channel auto cannot resolve: asinh(value / scale)."
+    },
+    {
+      "kind": "StringProperty",
+      "name": "sample_factor",
+      "defaultValue": "",
+      "description": "auto only. Column factor that identifies the sample, e.g. filename. Empty uses the first column factor. flowVS pools populations across samples, so this decides what a sample is."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "estimate_max_cells",
+      "defaultValue": 3000,
+      "description": "auto only. Cells per sample used for estimation, chosen by a seeded subsample. Reduced automatically if the projection is wide enough that the subsample would not fit the estimation memory budget."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "seed",
+      "defaultValue": 1,
+      "description": "auto only. Seed for that subsample, so an estimate is repeatable. Written into the Cofactors table."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "threads",
+      "defaultValue": 4,
+      "description": "auto only. Channels estimated at once. Peak memory grows with it, so it is explicit rather than 'every core'."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "signifLevel",
+      "defaultValue": 0.05,
+      "description": "auto only. flowVS significance level for peak detection."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "bwCorr",
+      "defaultValue": 1.0,
+      "description": "auto only. flowVS bandwidth correction; 1.0 matches Tercen's R implementation, 1.1 is closer to the original C."
     }
   ],
   "operatorSpec": {
@@ -55,7 +92,7 @@
             "kind": "MetaFactor",
             "name": "Column",
             "type": "",
-            "description": "Event or observation identifier.",
+            "description": "Event or observation identifier. For the auto method a column factor also identifies the sample; see the sample_factor property.",
             "ontologyMapping": "observation",
             "crosstabMapping": "column",
             "cardinality": "0..n",
@@ -83,29 +120,117 @@
     ],
     "outputSpecsV2": [
       {
-        "kind": "OperatorJoinSpec",
-        "joinOperators": [
+        "kind": "ConditionalJoinSpec",
+        "description": "auto also emits the cofactors it estimated",
+        "alternatives": [
           {
-            "kind": "JoinOperator",
-            "joinType": "left",
-            "leftPair": {
-              "kind": "ColumnPair",
-              "lColumns": [
-                "Row",
-                "Column"
-              ],
-              "rColumns": [
-                "Row",
-                "Column"
-              ]
-            },
-            "rightRelation": {
-              "kind": "TableRelation",
-              "attributes": [
+            "kind": "OutputAlternative",
+            "condition": "method = auto (transformed values and the estimated cofactors)",
+            "joinSpec": {
+              "kind": "OperatorJoinSpec",
+              "joinOperators": [
                 {
-                  "kind": "Attribute",
-                  "name": "asinh",
-                  "type": "double"
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [
+                      "Row",
+                      "Column"
+                    ],
+                    "rColumns": [
+                      "Row",
+                      "Column"
+                    ]
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "asinh",
+                        "type": "double"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [],
+                    "rColumns": []
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "channel",
+                        "type": "string"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "bartlett",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "unstable",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "cells_used",
+                        "type": "int32"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "seed",
+                        "type": "int32"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "OutputAlternative",
+            "condition": "method = fixed or manual (transformed values only)",
+            "joinSpec": {
+              "kind": "OperatorJoinSpec",
+              "joinOperators": [
+                {
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [
+                      "Row",
+                      "Column"
+                    ],
+                    "rColumns": [
+                      "Row",
+                      "Column"
+                    ]
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "asinh",
+                        "type": "double"
+                      }
+                    ]
+                  }
                 }
               ]
             }

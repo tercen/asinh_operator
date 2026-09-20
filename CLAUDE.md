@@ -24,14 +24,40 @@ once-per-study step").
 
 `manual` has no R fixture (the R operator ships none), so it is checked against the definition.
 
+## Structure, after the 2026-09-20 review
+
+The operator is one crate with three methods and two size paths, and the review that produced
+this section found seven things wrong with the first cut. What the layout means now:
+
+| module | holds |
+|---|---|
+| `props` | the settings, and every numeric property parsed as f64 then cast |
+| `input` | the crosstab: cell count, chunk decode, row labels, column groups, manual cofactors |
+| `algorithm` | the transform itself, pure functions over slices |
+| `cofactors` | `auto`: the subsample plan, the reservoirs, and the call into `flowvs` |
+| `output` | the result envelope, the value/index columns and the cofactor table |
+| `lib` | orchestration: which cofactors, which write path, upload |
+
+`tson`, `upload`, `pagecache` and `progress` are **copies** of read_fcs's modules. They are kept
+byte-identical on purpose — they diverged within a day of being copied — and they should become
+a shared crate when a third operator needs them. That is the one structural debt here.
+
 ## Memory
 
 Two paths, chosen by cell count (`output::COLLECT_MAX_CELLS`, 20 M):
 
 - **collect**: one pass, buffering `.ri`, `.ci` and the values — 16 B/cell, so 320 MB at the cap.
-- **stream**: three passes, one per output column, holding one chunk (1 M cells). The `.ri`/`.ci`
-  passes fetch a single column each; the value pass fetches `.ri` and `.y` because a per-channel
-  cofactor needs the row index.
+- **stream**: also **one** pass. TSON is column-major, so the obvious way to avoid buffering is a
+  pass per column, and that was the first implementation. It is the wrong trade: transfer beats
+  the arithmetic by about twenty to one, so three passes is the most expensive thing the operator
+  could do. Instead the value column is declared first and streamed straight through, while
+  `.ri` and `.ci` go to spill files in the exact little-endian layout TSON wants and are poured
+  in afterwards. One pass, one chunk of memory, 8 B/cell of scratch disk released as it goes.
+
+Estimation for `auto` never holds more than `cofactors::ESTIMATE_BUDGET_BYTES` (128 MB): the
+per-sample cell count is reduced to fit the projection, so a user raising `estimate_max_cells` to
+200,000 cannot push the operator past its booking. In collect mode the estimate is taken from the
+values already in memory, so only the streaming path spends a pass on it.
 
 Peak therefore does not grow with the projection, so `memory_model.json` books a **constant**
 600 MB (`intercept` 420 + 1.5 × `offset` 120) with a zero-exponent feature, because the install
@@ -50,12 +76,38 @@ chunks. `tson.rs`, `upload.rs`, `pagecache.rs` and `progress.rs` are the modules
 `read_fcs_rust_operator`; `tson.rs` gained `i32_list_header`/`i32_chunk` so `.ri`/`.ci` can be
 streamed too.
 
+## `auto`, and why the cofactors are an output
+
+`auto` estimates one cofactor per channel with `flowvs` and applies it in the same run, which is
+what the R asinh operator does and what the R logicle operator does with `estimateLogicle`. The
+difference is that those keep the estimate to themselves. Here it lands in a `Cofactors` table
+with Bartlett's statistic, an unstable flag, and the subsample size and seed that produced it.
+
+That table is the point. An automatic estimate silently changes whenever the data flowing through
+the step changes, so two timepoints of one study stop being comparable. Reviewing the table and
+feeding it back as the cofactor row factor with `method = manual` is how a study gets frozen, and
+the plan (`flowvs-rust-plan.md` §11) says to freeze once per study from the batch controls.
+
+Samples come from the column factor named by `sample_factor`, or the first one. It matters
+because flowVS pools populations across samples, and in a cytometry projection the columns are
+events while the sample is something like `filename`.
+
+`auto` is behind a cargo feature because `flowvs` is a path dependency and the image build copies
+this repository alone. Drop the feature once that crate has a remote: shipping an image where a
+declared method sometimes exists is worse than either alternative.
+
 ## The operator spec
 
-`operator.json`'s `operatorSpec` is mirrored from the R operator so both declare the same shape,
-including the `axis` entry that names the y factor. `tests/r_goldens.rs` asserts the declared
-output attribute and the column the writer produces have not drifted apart. Nothing here is
-data-dependent, so — unlike read_fcs — no `allowAdditionalAttributes` is needed.
+`operator.json`'s `operatorSpec` is mirrored from the R operator, including the `axis` entry that
+names the y factor, and extended with a **conditional** output: `auto` declares the cofactor
+table beside the values, the other methods declare only the values. The condition strings are
+written the way the platform tests them (`DataStep._matchesCondition` looks for the property name
+and then its value inside the same string).
+
+`tests/r_goldens.rs` checks all of it: every property the code reads is declared, the method enum
+matches, both alternatives list exactly the columns the writers produce, and the conditions match
+the right methods. Nothing here is data-dependent, so unlike read_fcs no `allowAdditionalAttributes`
+is needed.
 
 ## Docker
 

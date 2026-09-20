@@ -96,33 +96,119 @@ fn manual_method_applies_one_cofactor_per_row() {
 }
 
 /// `operator.json`'s spec says what a caller will get before the step runs
-/// (`DataStep.getPredictedAttributes`). It is hand-written, so compare it with what the code
-/// actually produces: the R operator names the output attribute `asinh`, and this port writes
-/// `<namespace>.asinh`, which is the same thing once the platform applies the namespace.
+/// (`DataStep.getPredictedAttributes`), and it is hand-written, so compare it with what the code
+/// actually produces. read_fcs shipped 0.1.1 with a spec that had silently lost a flag; the only
+/// defence is a test.
 #[test]
-fn operator_spec_matches_the_result_column() {
+fn operator_spec_matches_the_result_columns() {
     let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/operator.json");
     let spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(manifest).unwrap()).unwrap();
-    let attrs = &spec["operatorSpec"]["outputSpecsV2"][0]["joinOperators"][0]["rightRelation"]["attributes"];
-    let declared: Vec<&str> = attrs
+
+    // every property the code reads must be declared, or a user cannot set it
+    let declared: Vec<&str> = spec["properties"]
         .as_array()
-        .expect("outputSpecsV2[0].joinOperators[0].rightRelation.attributes")
+        .unwrap()
         .iter()
-        .map(|a| a["name"].as_str().unwrap())
+        .map(|p| p["name"].as_str().unwrap())
         .collect();
+    for name in [
+        "method",
+        "scale",
+        "sample_factor",
+        "estimate_max_cells",
+        "seed",
+        "threads",
+        "signifLevel",
+        "bwCorr",
+    ] {
+        assert!(
+            declared.contains(&name),
+            "property '{name}' is read by the operator but not declared in operator.json"
+        );
+    }
+    let methods: Vec<&str> = spec["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "method")
+        .expect("method property")["values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(methods, ["fixed", "manual", "auto"]);
+
+    // the two output alternatives: auto adds the cofactor table
+    let alts = spec["operatorSpec"]["outputSpecsV2"][0]["alternatives"]
+        .as_array()
+        .expect("outputSpecsV2[0].alternatives");
+    assert_eq!(alts.len(), 2);
+    let relations = |i: usize| -> Vec<Vec<String>> {
+        alts[i]["joinSpec"]["joinOperators"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|j| {
+                j["rightRelation"]["attributes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|a| a["name"].as_str().unwrap().to_string())
+                    .collect()
+            })
+            .collect()
+    };
+    let auto = alts
+        .iter()
+        .position(|a| a["condition"].as_str().unwrap().contains("auto"))
+        .expect("an alternative for auto");
+    let plain = 1 - auto;
+
+    assert_eq!(relations(plain), vec![vec!["asinh".to_string()]]);
+    let auto_rels = relations(auto);
     assert_eq!(
-        declared,
-        ["asinh"],
-        "the spec must declare exactly the column the operator writes"
+        auto_rels.len(),
+        2,
+        "auto declares the value and the cofactors"
     );
-    let ns = "ds0";
+    assert_eq!(auto_rels[0], vec!["asinh".to_string()]);
     assert_eq!(
-        asinh_operator::output::value_column(ns),
-        format!("{ns}.{}", declared[0]),
+        auto_rels[1],
+        vec![
+            "channel".to_string(),
+            "cofactor".to_string(),
+            "bartlett".to_string(),
+            "unstable".to_string(),
+            "cells_used".to_string(),
+            "seed".to_string()
+        ],
+        "the declared cofactor table must match what output::write_cofactor_table writes"
+    );
+
+    // the conditions have to match the way the platform tests them: it looks for the property
+    // name and then for its value inside the same string (`DataStep._matchesCondition`).
+    for (i, want) in [(auto, "auto"), (plain, "fixed")] {
+        let c = alts[i]["condition"].as_str().unwrap().to_lowercase();
+        assert!(
+            c.contains("method") && c.contains(want),
+            "condition `{c}` will not match a step whose method is {want}"
+        );
+    }
+    let plain_cond = alts[plain]["condition"].as_str().unwrap().to_lowercase();
+    assert!(
+        plain_cond.contains("manual") && !plain_cond.contains("auto"),
+        "the non-auto alternative must match manual and must not match auto: `{plain_cond}`"
+    );
+
+    // and the value column the writer produces is the declared attribute, namespaced
+    assert_eq!(
+        asinh_operator::output::value_column("ds0"),
+        "ds0.asinh",
         "the written column and the declared attribute have drifted apart"
     );
-    // The input spec has to name a y axis, or the platform cannot tell a user what to project.
+
     let axis = &spec["operatorSpec"]["inputSpecs"][0]["axis"][0]["metaFactors"][0];
     assert_eq!(axis["crosstabMapping"], "y");
     assert_eq!(axis["cardinality"], "1");
