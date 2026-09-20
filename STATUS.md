@@ -19,6 +19,14 @@ The first crosstab operator of the port, following the `create-rust-operator` sk
 Parity uses the R operator's published fixtures and projection, not goldens invented here, and
 needs no Tercen instance: `.ri` indexes the row facet table in file order and `.ci` the column one.
 
+## Reviewed and restructured, 2026-09-20
+
+A structural review found seven things and all are fixed: five undeclared properties, a spec that
+described one output while `auto` emits two, estimation memory governed by a property rather than
+a budget, three passes over the crosstab where one does, `auto` reading the input twice in collect
+mode, a hard-coded sample factor, and shared modules that had already diverged from read_fcs.
+`CLAUDE.md` has the reasoning. Both cargo configurations build, test and lint clean.
+
 ## What is not done
 
 - **It has never run against Tercen.** No dev run on Studio, so no measured peak memory: the
@@ -26,6 +34,7 @@ needs no Tercen instance: `.ri` indexes the row facet table in file order and `.
   cells = 320 MB of buffers) rather than from a measurement. Refit it after the first real run.
 - **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
   unit test should be regenerated from a Studio run of *this* operator once it installs.
+- **`auto` has no end-to-end test against Tercen**, only unit tests and the crate's own parity.
 - **`manual` mode has no end-to-end test**, only a unit test, because the R operator ships no
   fixture for it. It is the mode CYTOSHRINK will actually use, with a cofactor table as the
   second row factor.
