@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "dev"
 path = "src/bin/dev.rs"
 
+[[bin]]
+name = "probe_read"
+path = "src/bin/probe_read.rs"
+
 [dependencies]
 anyhow = "1"
 thiserror = "1"

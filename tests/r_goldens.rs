@@ -116,6 +116,7 @@ fn operator_spec_matches_the_result_columns() {
         "method",
         "scale",
         "sample_factor",
+        "collect_max_cells",
         "estimate_max_cells",
         "seed",
         "threads",

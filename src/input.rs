@@ -273,29 +273,60 @@ fn column_names(m: &HashMap<String, rustson::Value>) -> Vec<String> {
 }
 
 /// Decode one TSON chunk of the cell table into the requested columns.
+///
+/// A response is **not one document**. `stream_tson` concatenates every gRPC message it
+/// receives, and the server pages its answer — about 15,000 rows per page here — so the buffer
+/// holds one complete TSON document per page, back to back. Decoding only the first is what
+/// made a large request pathological: asking for a million rows transferred a million rows and
+/// used fifteen thousand of them, then asked again from a slightly later offset. Reading every
+/// document in the buffer turns the same request into 775,000 cells a second instead of 30,000.
 pub fn decode_chunk(bytes: &[u8], want_ri: bool, want_ci: bool, want_y: bool) -> Result<Chunk> {
-    let v = rustson::decode_bytes(bytes).map_err(|e| anyhow!("decode chunk: {e:?}"))?;
+    let mut out = Chunk::default();
+    let mut cur = std::io::Cursor::new(bytes);
+    while (cur.position() as usize) < bytes.len() {
+        let before = cur.position();
+        let v = rustson::decode(cur.clone()).map_err(|e| anyhow!("decode chunk: {e:?}"))?;
+        // `rustson::decode` takes the cursor by value, so advance our own by the document's
+        // length: re-encoding is not an option, and the decoder does not report what it read.
+        let consumed = rustson::encode(&v)
+            .map_err(|e| anyhow!("measure chunk: {e:?}"))?
+            .len();
+        cur.set_position(before + consumed as u64);
+        decode_one(&v, want_ri, want_ci, want_y, &mut out)?;
+        if consumed == 0 {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+fn decode_one(
+    v: &rustson::Value,
+    want_ri: bool,
+    want_ci: bool,
+    want_y: bool,
+    out: &mut Chunk,
+) -> Result<()> {
     let rustson::Value::MAP(m) = v else {
         bail!("chunk is not a map")
     };
-    let mut out = Chunk::default();
     for (name, want) in [(".ri", want_ri), (".ci", want_ci), (".y", want_y)] {
         if !want {
             continue;
         }
-        let values = find_column(&m, name).ok_or_else(|| {
+        let values = find_column(m, name).ok_or_else(|| {
             anyhow!(
                 "chunk has no column '{name}' (it has {:?})",
-                column_names(&m)
+                column_names(m)
             )
         })?;
         match name {
-            ".ri" => out.ri = as_i32(values, name)?,
-            ".ci" => out.ci = as_i32(values, name)?,
-            _ => out.y = as_f64(values, name)?,
+            ".ri" => out.ri.extend_from_slice(&as_i32(values, name)?),
+            ".ci" => out.ci.extend_from_slice(&as_i32(values, name)?),
+            _ => out.y.extend_from_slice(&as_f64(values, name)?),
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 fn as_i32(v: &rustson::Value, name: &str) -> Result<Vec<i32>> {

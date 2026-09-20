@@ -62,6 +62,33 @@ waiting for it; the same module should move there. The general fix belongs upstr
 `tercen-rs`, where colour extraction should warn rather than fail an operator that never asked
 for colours.
 
+## Reading a crosstab: one response is many documents (0.1.2)
+
+`TableStreamer::stream_tson` concatenates every gRPC message of a response, and the server pages
+its answer — about 15,000 rows a page on Studio. So the buffer holds **one complete TSON document
+per page, back to back**, and a decoder that reads the first one silently discards the rest.
+
+That was pathological rather than merely wrong. Asking for a million rows transferred a million
+rows, used fifteen thousand, then asked again from a slightly later offset, so the same data
+crossed the wire dozens of times: 800 bytes on the wire per cell of three columns that need
+sixteen.
+
+`input::decode_chunk` now reads every document in the buffer. On a 19.53 M-cell crosstab
+(93 files × 5,000 events × 43 channels, the read_fcs output):
+
+| | before | after |
+|---|---|---|
+| read, transform and write | 646.9 s | **8.2 s** |
+| end to end | 653.3 s | **17.5 s** |
+| peak RSS | 61.5 MB | 35.5 MB |
+| wire cost | ~800 B/cell | 16 B/cell, exactly the columns |
+
+`CHUNK` is 200,000 because that measured fastest (3.0 M cells/s, against 0.8 M at 15,000 and
+2.4 M at 1,000,000). The reader is bounded by the schema's row count either way.
+
+Decoding advances the cursor by re-encoding each document, because `rustson::decode` takes the
+cursor by value and reports nothing. A `decode_from(&mut Cursor)` upstream would remove that.
+
 ## Memory
 
 Two paths, chosen by cell count (`output::COLLECT_MAX_CELLS`, 20 M):

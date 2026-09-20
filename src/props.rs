@@ -35,6 +35,12 @@ pub struct Settings {
     pub signif_level: f64,
     /// flowVS bandwidth correction (1.0 = the R port's default).
     pub bw_corr: f64,
+    /// Cells above which the operator streams instead of buffering; 0 always streams.
+    ///
+    /// The default matches `output::COLLECT_MAX_CELLS`. It is a property because the right
+    /// answer depends on the instance: a worker with a small booking should stream sooner, and
+    /// forcing either path is how the two are compared on the same data.
+    pub collect_max_cells: usize,
     /// `factor · σ_neg` below which a flowVS cofactor is refused; 0 disables the floor.
     ///
     /// Off by default, because `flowvs-rust-plan.md` §5 wants every improvement opt-in so the
@@ -57,6 +63,7 @@ impl Default for Settings {
             threads: 4,
             signif_level: 0.05,
             bw_corr: 1.0,
+            collect_max_cells: crate::output::COLLECT_MAX_CELLS,
             cofactor_floor: 0.0,
             sample_factor: String::new(),
         }
@@ -127,6 +134,8 @@ pub fn settings_from_ctx(ctx: &ContextBase) -> Result<Settings> {
         threads: threads.max(0.0) as usize,
         signif_level,
         bw_corr,
+        collect_max_cells: num("collect_max_cells", crate::output::COLLECT_MAX_CELLS as f64)?
+            .max(0.0) as usize,
         cofactor_floor: {
             let v = num("cofactor_floor", 0.0)?;
             if v < 0.0 {

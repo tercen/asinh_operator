@@ -34,6 +34,12 @@
       "description": "Cofactor for the fixed method, and the fallback for a channel auto cannot resolve: asinh(value / scale)."
     },
     {
+      "kind": "DoubleProperty",
+      "name": "collect_max_cells",
+      "defaultValue": 20000000,
+      "description": "Cells above which the operator streams the result instead of buffering it; 0 always streams. Lower it on an instance with a small memory booking."
+    },
+    {
       "kind": "StringProperty",
       "name": "sample_factor",
       "defaultValue": "",

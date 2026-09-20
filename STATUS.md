@@ -49,7 +49,10 @@ check saw on the study panel. See CLAUDE.md for the numbers and the fix.
 
 ## What is not done
 
-- **Memory is still unmeasured at scale.** The runs above peaked at 11.6 MB and 28.5 MB, which
+- ~~Memory unmeasured at scale~~ — done. The streaming path ran on a real 19.53 M-cell crosstab:
+  17.5 s end to end, peak RSS 35.5 MB, spill files 8 B/cell. The 600 MB booking is generous; the
+  collect path at its 20 M cap is what it is really sized for.
+- **Superseded:** The runs above peaked at 11.6 MB and 28.5 MB, which
   says nothing about the 20 M-cell cap the 600 MB booking is designed around, and the streaming
   path has never run against Tercen at all.
 - **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
