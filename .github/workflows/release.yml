@@ -46,6 +46,11 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=pep440,pattern={{version}}
+          # No `latest`. The manifest pins an exact version, so a moving tag has no job here and
+          # is only a way to lose track of what ran: this image's `latest` has already moved
+          # between releases, which is how the pamgene csuka operator became unreproducible.
+          flavor: |
+            latest=false
 
       - name: Build and push Docker image
         id: push
