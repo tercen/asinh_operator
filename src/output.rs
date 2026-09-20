@@ -49,17 +49,35 @@ pub fn value_column(namespace: &str) -> String {
     format!("{namespace}.asinh")
 }
 
+/// Name of the second output relation: the cofactors the run used.
+pub const COFACTORS: &str = "Cofactors";
+
+/// One row of the cofactor table — what was used, and how much to trust it.
+#[derive(Debug, Clone)]
+pub struct CofactorRow {
+    pub channel: String,
+    pub cofactor: f64,
+    /// Bartlett's statistic at that cofactor. Large means flowVS found little to stabilise.
+    pub objective: f64,
+    /// True when the estimate rests on nothing: fewer than two usable populations.
+    pub unstable: bool,
+    /// Cells per sample the estimate used, and the seed that chose them.
+    pub cells_used: i32,
+    pub seed: i32,
+}
+
 pub fn write_header<W: Write>(
     w: &mut TsonWriter<W>,
     table_name: &str,
     n_rows: usize,
     cols: &[ColSpec],
+    n_tables: usize,
 ) -> Result<()> {
     w.map(3)?;
     w.key("kind")?;
     w.str("OperatorResult")?;
     w.key("tables")?;
-    w.list(1)?;
+    w.list(n_tables)?;
 
     w.map(4)?;
     w.key("kind")?;
@@ -106,10 +124,122 @@ pub fn write_column_header<W: Write>(
     Ok(())
 }
 
-/// Close the result after the last column (the empty join list).
-pub fn write_footer<W: Write>(w: &mut TsonWriter<W>) -> Result<()> {
-    w.key("joinOperators")?;
+/// The cofactor table, written after the per-cell table.
+///
+/// It exists so an estimate can be **reviewed and then frozen**: read it, look at the
+/// histograms, and feed it back as the cofactor row factor with `method = manual`. Without that
+/// round trip an automatic estimate silently changes whenever the data flowing through the step
+/// changes, and two timepoints stop being comparable.
+pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow]) -> Result<()> {
+    let cols = [
+        ColSpec {
+            name: "channel",
+            ty: "string",
+        },
+        ColSpec {
+            name: "cofactor",
+            ty: "double",
+        },
+        ColSpec {
+            name: "bartlett",
+            ty: "double",
+        },
+        ColSpec {
+            name: "unstable",
+            ty: "double",
+        },
+        ColSpec {
+            name: "cells_used",
+            ty: "int32",
+        },
+        ColSpec {
+            name: "seed",
+            ty: "int32",
+        },
+    ];
+    let n = rows.len();
+    w.map(4)?;
+    w.key("kind")?;
+    w.str("Table")?;
+    w.key("nRows")?;
+    w.i32(i32::try_from(n).unwrap_or(i32::MAX))?;
+    w.key("properties")?;
+    w.map(4)?;
+    w.key("kind")?;
+    w.str("TableProperties")?;
+    w.key("name")?;
+    w.str(COFACTORS)?;
+    w.key("sortOrder")?;
     w.list(0)?;
+    w.key("ascending")?;
+    w.bool(false)?;
+    w.key("columns")?;
+    w.list(cols.len())?;
+
+    write_column_header(w, &cols[0], n)?;
+    w.str_list(&rows.iter().map(|r| r.channel.as_str()).collect::<Vec<_>>())?;
+    write_column_header(w, &cols[1], n)?;
+    w.f64_list(&rows.iter().map(|r| r.cofactor).collect::<Vec<_>>())?;
+    write_column_header(w, &cols[2], n)?;
+    w.f64_list(&rows.iter().map(|r| r.objective).collect::<Vec<_>>())?;
+    write_column_header(w, &cols[3], n)?;
+    w.f64_list(
+        &rows
+            .iter()
+            .map(|r| if r.unstable { 1.0 } else { 0.0 })
+            .collect::<Vec<_>>(),
+    )?;
+    write_column_header(w, &cols[4], n)?;
+    w.i32_list(&rows.iter().map(|r| r.cells_used).collect::<Vec<_>>())?;
+    write_column_header(w, &cols[5], n)?;
+    w.i32_list(&rows.iter().map(|r| r.seed).collect::<Vec<_>>())?;
+    Ok(())
+}
+
+fn write_simple_relation<W: Write>(w: &mut TsonWriter<W>, id: &str) -> Result<()> {
+    w.map(3)?;
+    w.key("kind")?;
+    w.str("SimpleRelation")?;
+    w.key("id")?;
+    w.str(id)?;
+    w.key("index")?;
+    w.i32(0)?;
+    Ok(())
+}
+
+fn write_column_pair<W: Write>(w: &mut TsonWriter<W>, l: &[&str], r: &[&str]) -> Result<()> {
+    w.map(3)?;
+    w.key("kind")?;
+    w.str("ColumnPair")?;
+    w.key("lColumns")?;
+    w.list(l.len())?;
+    for s in l {
+        w.str(s)?;
+    }
+    w.key("rColumns")?;
+    w.list(r.len())?;
+    for s in r {
+        w.str(s)?;
+    }
+    Ok(())
+}
+
+/// Close the result. With a cofactor table there is one join, declaring it as a standalone
+/// relation beside the per-cell one (the shape read_fcs uses for its summary table).
+pub fn write_footer<W: Write>(w: &mut TsonWriter<W>, with_cofactors: bool) -> Result<()> {
+    w.key("joinOperators")?;
+    w.list(usize::from(with_cofactors))?;
+    if with_cofactors {
+        w.map(4)?;
+        w.key("kind")?;
+        w.str("JoinOperator")?;
+        w.key("joinType")?;
+        w.str("")?;
+        w.key("leftPair")?;
+        write_column_pair(w, &[], &[])?;
+        w.key("rightRelation")?;
+        write_simple_relation(w, COFACTORS)?;
+    }
     w.flush()?;
     Ok(())
 }
@@ -127,7 +257,7 @@ mod tests {
     fn a_result_bigger_than_an_i32_is_an_error_not_a_panic() {
         let mut w = TsonWriter::new(Vec::new()).unwrap();
         let cols = result_columns("ds0.asinh");
-        let e = write_header(&mut w, "t", i32::MAX as usize + 1, &cols).unwrap_err();
+        let e = write_header(&mut w, "t", i32::MAX as usize + 1, &cols, 1).unwrap_err();
         assert!(e.to_string().contains("more than a Tercen table can hold"));
     }
 }

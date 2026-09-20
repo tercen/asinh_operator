@@ -143,3 +143,83 @@ fn as_f64(v: &rustson::Value, name: &str) -> Result<Vec<f64>> {
         other => bail!("column '{name}' is not a numeric list ({other:?})"),
     })
 }
+
+/// The first row factor's values, one per row index — the channel names.
+pub async fn row_labels(ctx: &ContextBase) -> Result<Vec<String>> {
+    let names = ctx
+        .rnames()
+        .await
+        .map_err(|e| anyhow!("read row factor names: {e}"))?;
+    let name = names
+        .first()
+        .ok_or_else(|| anyhow!("the row projection is empty: a channel factor is required"))?
+        .clone();
+    let bytes = ctx
+        .streamer()
+        .stream_tson(ctx.row_hash(), Some(vec![name.clone()]), 0, -1)
+        .await
+        .map_err(|e| anyhow!("read row factor '{name}': {e}"))?;
+    column_as_strings(&bytes, &name)
+}
+
+/// A group index per column, taken from the **first** column factor: the sample each event
+/// belongs to. Returns all-zero (one group) when the projection has no column factor, which is
+/// the useful reading when columns are individual events.
+pub async fn column_groups(ctx: &ContextBase) -> Result<Vec<usize>> {
+    let names = ctx
+        .cnames()
+        .await
+        .map_err(|e| anyhow!("read column factor names: {e}"))?;
+    let Some(name) = names.first().cloned() else {
+        return Ok(Vec::new());
+    };
+    let bytes = ctx
+        .streamer()
+        .stream_tson(ctx.column_hash(), Some(vec![name.clone()]), 0, -1)
+        .await
+        .map_err(|e| anyhow!("read column factor '{name}': {e}"))?;
+    let labels = column_as_strings(&bytes, &name)?;
+    let mut seen: Vec<String> = Vec::new();
+    Ok(labels
+        .into_iter()
+        .map(|l| match seen.iter().position(|x| *x == l) {
+            Some(i) => i,
+            None => {
+                seen.push(l);
+                seen.len() - 1
+            }
+        })
+        .collect())
+}
+
+/// Read one named column of a TSON table as strings, whatever its stored type.
+pub fn column_as_strings(bytes: &[u8], name: &str) -> Result<Vec<String>> {
+    let v = rustson::decode_bytes(bytes).map_err(|e| anyhow!("decode table: {e:?}"))?;
+    let rustson::Value::MAP(m) = v else {
+        bail!("table is not a map")
+    };
+    let Some(rustson::Value::LST(cols)) = m.get("columns") else {
+        bail!("table has no columns")
+    };
+    for c in cols {
+        let rustson::Value::MAP(c) = c else { continue };
+        let Some(rustson::Value::STR(n)) = c.get("name") else {
+            continue;
+        };
+        if n != name {
+            continue;
+        }
+        let values = c
+            .get("values")
+            .ok_or_else(|| anyhow!("column '{name}' has no values"))?;
+        return Ok(match values {
+            rustson::Value::LSTSTR(sv) => sv
+                .try_to_vec()
+                .map_err(|e| anyhow!("column '{name}' is not valid text: {e:?}"))?,
+            rustson::Value::LSTF64(v) => v.iter().map(|x| x.to_string()).collect(),
+            rustson::Value::LSTI32(v) => v.iter().map(|x| x.to_string()).collect(),
+            other => bail!("column '{name}' has an unsupported type ({other:?})"),
+        });
+    }
+    bail!("column '{name}' not found in the table")
+}

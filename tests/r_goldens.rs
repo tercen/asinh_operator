@@ -104,8 +104,7 @@ fn operator_spec_matches_the_result_column() {
     let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/operator.json");
     let spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(manifest).unwrap()).unwrap();
-    let attrs = &spec["operatorSpec"]["outputSpecsV2"][0]["joinOperators"][0]["rightRelation"]
-        ["attributes"];
+    let attrs = &spec["operatorSpec"]["outputSpecsV2"][0]["joinOperators"][0]["rightRelation"]["attributes"];
     let declared: Vec<&str> = attrs
         .as_array()
         .expect("outputSpecsV2[0].joinOperators[0].rightRelation.attributes")

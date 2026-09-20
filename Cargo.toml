@@ -31,6 +31,15 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # (create-rust-operator §5; read_fcs measured the difference).
 tikv-jemallocator = "0.6"
 
+# Cofactor estimation for `method = auto`. Optional because the crate is local-only for now:
+# the Docker build copies this repository alone, so the feature can only be switched on once
+# flowvs has a git remote. Everything else builds and ships without it.
+flowvs = { path = "../flowvs-rs", optional = true }
+
+[features]
+default = []
+auto = ["dep:flowvs"]
+
 [dev-dependencies]
 tempfile = "3"
 # The test that checks operator.json's spec against the emitted columns.

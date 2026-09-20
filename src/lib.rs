@@ -5,6 +5,8 @@
 //! cofactor from the `scale` property; `manual` takes one per channel from the second row
 //! factor. `auto` (flowVS estimation) is deliberately not here — see `props::settings_from_ctx`.
 pub mod algorithm;
+#[cfg(feature = "auto")]
+pub mod cofactors;
 pub mod input;
 pub mod output;
 pub mod pagecache;
@@ -104,6 +106,8 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
     let s = props::settings_from_ctx(ctx)?;
     tracing::info!(?s, "properties");
 
+    #[allow(unused_mut)] // only the `auto` path fills it
+    let mut cofactor_table: Vec<output::CofactorRow> = Vec::new();
     let cofactors = match s.method {
         Method::Fixed => None,
         Method::Manual => {
@@ -111,7 +115,23 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
             tracing::info!(channels = v.len(), "per-channel cofactors read");
             Some(v)
         }
+        #[cfg(feature = "auto")]
+        Method::Auto => {
+            rep.at(0, "Estimating cofactors (flowVS)");
+            let est = cofactors::estimate(ctx, &s).await?;
+            for row in &est.table {
+                rep.info(format!(
+                    "{}: cofactor {:.1}{}",
+                    row.channel,
+                    row.cofactor,
+                    if row.unstable { " (unstable)" } else { "" }
+                ));
+            }
+            cofactor_table = est.table;
+            Some(est.per_row)
+        }
     };
+    let with_cofactors = !cofactor_table.is_empty();
 
     let n_cells = input::cell_count(ctx).await?;
     let collect = n_cells <= output::COLLECT_MAX_CELLS;
@@ -138,10 +158,32 @@ async fn execute(ctx: &ContextBase, mode: Mode) -> Result<()> {
         let w = std::io::BufWriter::with_capacity(4 << 20, pagecache::Releasing::new(f, 256 << 20));
         let mut w = TsonWriter::new(w)?;
         if collect {
-            write_collect(ctx, &s, cofactors.as_deref(), n_cells, &mut w, &rep).await?;
+            write_collect(
+                ctx,
+                &s,
+                cofactors.as_deref(),
+                n_cells,
+                &mut w,
+                &rep,
+                with_cofactors,
+            )
+            .await?;
         } else {
-            write_streamed(ctx, &s, cofactors.as_deref(), n_cells, &mut w, &rep).await?;
+            write_streamed(
+                ctx,
+                &s,
+                cofactors.as_deref(),
+                n_cells,
+                &mut w,
+                &rep,
+                with_cofactors,
+            )
+            .await?;
         }
+        if with_cofactors {
+            output::write_cofactor_table(&mut w, &cofactor_table)?;
+        }
+        output::write_footer(&mut w, with_cofactors)?;
     }
     let bytes = std::fs::metadata(&result_path)?.len();
     let secs = t.elapsed().as_secs_f64();
@@ -191,6 +233,7 @@ async fn write_collect<W: std::io::Write>(
     n_cells: usize,
     w: &mut TsonWriter<W>,
     rep: &Reporter,
+    with_cofactors: bool,
 ) -> Result<()> {
     let mut ri: Vec<i32> = Vec::with_capacity(n_cells);
     let mut ci: Vec<i32> = Vec::with_capacity(n_cells);
@@ -229,7 +272,13 @@ async fn write_collect<W: std::io::Write>(
     let ns = output::value_column(ctx.namespace());
     let cols = output::result_columns(&ns);
     let n = y.len();
-    output::write_header(w, &uuid_like(ctx), n, &cols)?;
+    output::write_header(
+        w,
+        &uuid_like(ctx),
+        n,
+        &cols,
+        1 + usize::from(with_cofactors),
+    )?;
     output::write_column_header(w, &cols[0], n)?;
     w.i32_list(&ri)?;
     output::write_column_header(w, &cols[1], n)?;
@@ -237,7 +286,6 @@ async fn write_collect<W: std::io::Write>(
     output::write_column_header(w, &cols[2], n)?;
     rep.at(progress::WRITE.0, "Writing the result");
     w.f64_list(&y)?;
-    output::write_footer(w)?;
     Ok(())
 }
 
@@ -249,10 +297,17 @@ async fn write_streamed<W: std::io::Write>(
     n_cells: usize,
     w: &mut TsonWriter<W>,
     rep: &Reporter,
+    with_cofactors: bool,
 ) -> Result<()> {
     let ns = output::value_column(ctx.namespace());
     let cols = output::result_columns(&ns);
-    output::write_header(w, &uuid_like(ctx), n_cells, &cols)?;
+    output::write_header(
+        w,
+        &uuid_like(ctx),
+        n_cells,
+        &cols,
+        1 + usize::from(with_cofactors),
+    )?;
 
     for (pass, col) in [".ri", ".ci"].iter().enumerate() {
         output::write_column_header(w, &cols[pass], n_cells)?;
@@ -321,7 +376,6 @@ async fn write_streamed<W: std::io::Write>(
         return Err(e);
     }
     check_count(written, n_cells, ".y")?;
-    output::write_footer(w)?;
     Ok(())
 }
 
