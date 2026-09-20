@@ -20,6 +20,14 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
+      # `flowvs` is a path dependency while that crate is local-only, and cargo resolves a path
+      # dependency even when its feature is off, so a checkout without it cannot build. The
+      # default build has no `auto`, so strip the line here as the Dockerfile does. This step
+      # disappears the day flowvs has a git remote.
+      - name: Drop the local-only optional dependency
+        run: |
+          sed -i -e '/^flowvs = { path =/d' -e 's/^auto = \["dep:flowvs"\]/auto = []/' Cargo.toml
+          git diff --stat Cargo.toml
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
