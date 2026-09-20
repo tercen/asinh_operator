@@ -5,9 +5,9 @@
 //! cofactor from the `scale` property; `manual` takes one per channel from the second row
 //! factor. `auto` (flowVS estimation) is deliberately not here — see `props::settings_from_ctx`.
 pub mod algorithm;
-pub mod context;
 #[cfg(feature = "auto")]
 pub mod cofactors;
+pub mod context;
 pub mod input;
 pub mod output;
 pub mod pagecache;
