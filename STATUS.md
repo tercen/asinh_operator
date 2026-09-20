@@ -40,10 +40,12 @@ Two bugs came out of the first run, both about talking to the server rather than
 unbounded chunk loop (fixed by counting rows against the schema) and the wrong TSON layout for
 streamed tables (both layouts are accepted now). Neither was reachable from a unit test.
 
-The `auto` run also exposed something about flowVS rather than the operator: the estimate can
-swing between 2 and 99 for the same channel depending on the subsample size, with a healthy
-Bartlett statistic at both. See CLAUDE.md. **Do not freeze a cofactor table from this operator
-until the stability check exists.**
+The `auto` run also raised a question about flowVS rather than the operator, and measuring it
+answered it: on **real** data the cofactor moves by 5–20 % under resampling, which is the order
+the plan already tolerates, so a frozen table is sound as long as the subsample size and seed
+travel with it. On synthetic data with a very tight negative population the estimate collapses
+to a degenerate minimum instead (2 versus 99), which is the dim-channel failure the cofactor
+check saw on the study panel. See CLAUDE.md for the numbers and the fix.
 
 ## What is not done
 
@@ -52,7 +54,9 @@ until the stability check exists.**
   path has never run against Tercen at all.
 - **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
   unit test should be regenerated from a Studio run of *this* operator once it installs.
-- **`auto` has no *stability* check**: see above. The path itself now works end to end.
+- **`auto` reports no fragility signal.** The cheap one is the search's runner-up interval, which
+  is already computed and thrown away; the principled one is the negative-spread floor, which is
+  the crate's job (`flowvs-rust-plan.md` §5).
 - **`manual` mode has no end-to-end test**, only a unit test, because the R operator ships no
   fixture for it. It is the mode CYTOSHRINK will actually use, with a cofactor table as the
   second row factor.

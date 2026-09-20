@@ -96,27 +96,39 @@ events while the sample is something like `filename`.
 this repository alone. Drop the feature once that crate has a remote: shipping an image where a
 declared method sometimes exists is worse than either alternative.
 
-## What the first auto run showed about flowVS
+## How stable is a flowVS cofactor? (measured 2026-09-20)
 
-On a synthetic eight-channel set (four samples, 5,000 events, a 70/30 mixture per channel), the
-same channel estimates a cofactor of **2.0 from 3,000 cells per sample and 99 from 5,000**. The
-objective is bimodal, both minima are real, and Bartlett's statistic is small and healthy-looking
-at both, so nothing in the output says the answer was a coin toss. CD8 did the opposite: 90 at
-both sizes.
+Worth knowing before anyone freezes a table, and the answer differs sharply between a channel
+with a clear positive population and one without.
 
-Two consequences.
+**Real data** (`flowvs_input.csv`, 3 channels, 12 samples, ~5,000 cells each) resampled:
 
-`estimate_max_cells` is a **scientific** parameter, not a performance knob. It belongs in the
-Cofactors table, which is why it is written there with the seed.
+| | CD4 | CD8 | CD3 |
+|---|---|---|---|
+| 1,000 → 5,000 cells per sample | 6723 → 6389 | 4937 → 4625 | 5361 → 6147 |
+| spread across sizes | 6% | 20% | 15% |
+| spread across three seeds at 3,000 | 4% | 12% | 10% |
 
-The `unstable` flag as implemented is too weak. It only fires when flowVS finds fewer than two
-usable populations, which is total failure; it does not fire when the search lands in a different
-local minimum. The honest diagnostic is to estimate twice on disjoint subsamples and report the
-spread, which costs one more pass over the same cells. That is worth doing before anyone freezes
-a table from this operator, and it is the guardrail `flowvs-rust-plan.md` §5 gestures at.
+So on a well-behaved channel the estimate wobbles by roughly **5 to 20 %**, whichever way it is
+resampled. That is the same order as the tolerance `flowvs-rust-plan.md` §3 already accepts, and
+as the 12.7 % it records between the R port and the C original. It is invisible on a histogram.
+Freezing a table is fine, provided the subsample size and seed are recorded — they are, in the
+Cofactors table — and kept fixed for the study.
 
-This is not a Rust artefact: the crate reproduces the R implementation's published cofactors to
-1e-15, and R would swing the same way on the same subsamples.
+**Synthetic data with a very tight negative population** behaves completely differently: the same
+channel gave a cofactor of **2.0 from 3,000 cells and 99 from 5,000**, both genuine minima of the
+objective, both with a small Bartlett statistic. The small answer is the degenerate one, where
+asinh is effectively a log of the noise and the variances match for the wrong reason.
+
+That is not only a synthetic curiosity: it is the dim-channel failure the cofactor check already
+saw on the study panel, where flowVS collapsed on TCRγδ, CD56 and CD45. The principled fix is the
+negative-spread floor in `flowvs-rust-plan.md` §5 — a cofactor below the spread of the negative
+population cannot be stabilising anything — and it belongs in the crate, not here.
+
+What this operator should add meanwhile is the **runner-up**: the search already computes a best
+cofactor per logarithmic interval and keeps only the winner. When the second-best objective is
+nearly as good but its cofactor is far away, the answer was a coin toss, and saying so costs
+nothing.
 
 ## The operator spec
 
