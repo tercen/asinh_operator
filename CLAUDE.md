@@ -42,6 +42,26 @@ this section found seven things wrong with the first cut. What the layout means 
 byte-identical on purpose — they diverged within a day of being copied — and they should become
 a shared crate when a third operator needs them. That is the one structural debt here.
 
+## Loading the task (0.1.1)
+
+`src/context.rs` builds the context from the **task** and never fetches the workflow.
+
+`ProductionContext::from_task_id` does fetch it, to pull colour and palette settings off the
+step, and it fails the whole run when the step is not in the saved workflow document:
+`Step '…' not found in workflow`. That happens intermittently in normal use — change a property,
+run, and the task can reference a step the saved workflow has not caught up with; a rerun
+usually succeeds. Faris hit it on tercen.com on 2026-09-20, at cofactor 10 and again at 7, with
+successful runs in between.
+
+Everything a transform needs is on the task: the `CubeQuery` carries the table hashes and the
+operator settings, and the schema ids are on the task or on the `CubeQueryTask` that produced
+it. Colours, palettes, chart kind and axis tables are for plot operators.
+
+`read_fcs_rust_operator` still calls `from_task_id` and has the same intermittent failure
+waiting for it; the same module should move there. The general fix belongs upstream in
+`tercen-rs`, where colour extraction should warn rather than fail an operator that never asked
+for colours.
+
 ## Memory
 
 Two paths, chosen by cell count (`output::COLLECT_MAX_CELLS`, 20 M):

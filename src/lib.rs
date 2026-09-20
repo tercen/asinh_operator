@@ -5,6 +5,7 @@
 //! cofactor from the `scale` property; `manual` takes one per channel from the second row
 //! factor. `auto` (flowVS estimation) is deliberately not here — see `props::settings_from_ctx`.
 pub mod algorithm;
+pub mod context;
 #[cfg(feature = "auto")]
 pub mod cofactors;
 pub mod input;
@@ -21,7 +22,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow};
 use tercen_rs::context::ContextBase;
-use tercen_rs::{DevContext, ProductionContext, TercenClient};
+use tercen_rs::{DevContext, TercenClient};
 
 use progress::Reporter;
 use props::{Method, Settings};
@@ -44,9 +45,8 @@ pub fn require_env(name: &str) -> Result<String> {
 pub async fn run(task_id: &str) -> Result<()> {
     tracing::info!("asinh_operator starting (task_id={task_id})");
     let client = build_client().await?;
-    let ctx = ProductionContext::from_task_id(client, task_id)
-        .await
-        .map_err(|e| anyhow!("load task {task_id}: {e}"))?;
+    // Deliberately not `ProductionContext::from_task_id`: see context.rs.
+    let ctx = context::from_task_id(client, task_id).await?;
     execute(
         &ctx,
         Mode::Production {
