@@ -14,7 +14,7 @@
 //! run stops depending on which cells happened to flow through it.
 use std::collections::HashMap;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 use tercen_rs::context::ContextBase;
 
 use crate::input;
@@ -112,26 +112,13 @@ pub struct Estimated {
 /// one sample instead, which is the useful reading of the same situation.
 pub async fn estimate(ctx: &ContextBase, s: &Settings) -> Result<Estimated> {
     let plan = Plan::new(ctx, s).await?;
+    let n_cells = input::cell_count(ctx).await?;
     let mut res: HashMap<(usize, usize), Reservoir> = HashMap::new();
-    let mut err: Option<anyhow::Error> = None;
-    ctx.streamer()
-        .stream_table_chunked(
-            ctx.qt_hash(),
-            Some(vec![".ri".into(), ".ci".into(), ".y".into()]),
-            1_000_000,
-            |bytes| {
-                match input::decode_chunk(&bytes, true, true, true) {
-                    Ok(c) => plan.offer(&mut res, &c.ri, &c.ci, &c.y, s.seed),
-                    Err(e) => err = Some(e),
-                }
-                Ok(())
-            },
-        )
-        .await
-        .map_err(|e| anyhow!("stream the crosstab for estimation: {e}"))?;
-    if let Some(e) = err {
-        return Err(e);
-    }
+    input::for_each_chunk(ctx, &[".ri", ".ci", ".y"], n_cells, 1_000_000, |c| {
+        plan.offer(&mut res, &c.ri, &c.ci, &c.y, s.seed);
+        Ok(())
+    })
+    .await?;
     Ok(plan.finish(res, s))
 }
 

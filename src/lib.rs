@@ -28,7 +28,7 @@ use props::{Method, Settings};
 use tson::TsonWriter;
 
 /// Cells fetched per gRPC round trip.
-const CHUNK: i64 = 1_000_000;
+const CHUNK: usize = 1_000_000;
 
 pub fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -244,34 +244,18 @@ async fn write_collect<W: std::io::Write>(
     let mut ci: Vec<i32> = Vec::with_capacity(n_cells);
     let mut y: Vec<f64> = Vec::with_capacity(n_cells);
     let mut seen = 0usize;
-    let mut err: Option<anyhow::Error> = None;
-    ctx.streamer()
-        .stream_table_chunked(
-            ctx.qt_hash(),
-            Some(vec![".ri".into(), ".ci".into(), ".y".into()]),
-            CHUNK,
-            |bytes| {
-                match input::decode_chunk(&bytes, true, true, true) {
-                    Ok(c) => {
-                        seen += c.y.len();
-                        ri.extend_from_slice(&c.ri);
-                        ci.extend_from_slice(&c.ci);
-                        y.extend_from_slice(&c.y);
-                        rep.at(
-                            progress::band(progress::READ, seen, n_cells.max(1)),
-                            format!("Read {seen} of {n_cells} values"),
-                        );
-                    }
-                    Err(e) => err = Some(e),
-                }
-                Ok(())
-            },
-        )
-        .await
-        .map_err(|e| anyhow!("stream the crosstab: {e}"))?;
-    if let Some(e) = err {
-        return Err(e);
-    }
+    input::for_each_chunk(ctx, &[".ri", ".ci", ".y"], n_cells, CHUNK, |c| {
+        seen += c.len();
+        ri.extend_from_slice(&c.ri);
+        ci.extend_from_slice(&c.ci);
+        y.extend_from_slice(&c.y);
+        rep.at(
+            progress::band(progress::READ, seen, n_cells.max(1)),
+            format!("Read {seen} of {n_cells} values"),
+        );
+        Ok(())
+    })
+    .await?;
 
     // `auto` costs no extra pass here: the values are already in memory, so the subsample comes
     // from them instead of reading the crosstab a second time.
@@ -357,39 +341,19 @@ async fn write_streamed<W: std::io::Write>(
         output::write_column_header(w, &cols[0], n_cells)?;
         w.f64_list_header(n_cells)?;
 
-        let mut err: Option<anyhow::Error> = None;
-        ctx.streamer()
-            .stream_table_chunked(
-                ctx.qt_hash(),
-                Some(vec![".ri".into(), ".ci".into(), ".y".into()]),
-                CHUNK,
-                |bytes| {
-                    match input::decode_chunk(&bytes, true, true, true) {
-                        Ok(mut c) => {
-                            let step = transform(&mut c.y, &c.ri, s, cofactors)
-                                .and_then(|_| w.f64_chunk(&c.y).map_err(anyhow::Error::from))
-                                .and_then(|_| write_i32_le(&mut ri_out, &c.ri))
-                                .and_then(|_| write_i32_le(&mut ci_out, &c.ci));
-                            if let Err(e) = step {
-                                err = Some(e);
-                                return Ok(());
-                            }
-                            written += c.y.len();
-                            rep.at(
-                                progress::band(progress::READ, written, n_cells.max(1)),
-                                format!("Transformed {written} of {n_cells} values"),
-                            );
-                        }
-                        Err(e) => err = Some(e),
-                    }
-                    Ok(())
-                },
-            )
-            .await
-            .map_err(|e| anyhow!("stream the crosstab: {e}"))?;
-        if let Some(e) = err {
-            return Err(e);
-        }
+        input::for_each_chunk(ctx, &[".ri", ".ci", ".y"], n_cells, CHUNK, |mut c| {
+            transform(&mut c.y, &c.ri, s, cofactors)?;
+            w.f64_chunk(&c.y)?;
+            write_i32_le(&mut ri_out, &c.ri)?;
+            write_i32_le(&mut ci_out, &c.ci)?;
+            written += c.len();
+            rep.at(
+                progress::band(progress::READ, written, n_cells.max(1)),
+                format!("Transformed {written} of {n_cells} values"),
+            );
+            Ok(())
+        })
+        .await?;
         use std::io::Write as _;
         ri_out.flush()?;
         ci_out.flush()?;
