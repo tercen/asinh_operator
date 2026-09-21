@@ -14,7 +14,7 @@
   "urls": [
     "https://github.com/tercen/asinh_rust_operator"
   ],
-  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.2",
+  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.3",
   "properties": [
     {
       "kind": "EnumeratedProperty",
@@ -72,8 +72,8 @@
     {
       "kind": "DoubleProperty",
       "name": "cofactor_floor",
-      "defaultValue": 0,
-      "description": "auto only. Refuse a cofactor below this multiple of the negative population's spread; 0 disables it. 2.5 is the convention used when this panel's cofactors were checked. Off by default so the estimate reproduces flowVS."
+      "defaultValue": 2.5,
+      "description": "auto only. Refuse a cofactor below this multiple of the negative population's spread, and use the floor instead; the Cofactors table then reports the channel as 'floored' and keeps what flowVS returned. On by default because the search can prefer a degenerate cofactor near 2, where asinh has become a logarithm of the noise. Set it to 0 to reproduce flowVS exactly."
     },
     {
       "kind": "DoubleProperty",

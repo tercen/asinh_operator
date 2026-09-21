@@ -20,6 +20,10 @@ pub enum Method {
     Auto,
 }
 
+/// Multiple of the negative population's spread below which a cofactor is refused. See
+/// [`Settings::cofactor_floor`] for why this is on rather than off.
+pub const DEFAULT_COFACTOR_FLOOR: f64 = 2.5;
+
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub method: Method,
@@ -43,8 +47,16 @@ pub struct Settings {
     pub collect_max_cells: usize,
     /// `factor · σ_neg` below which a flowVS cofactor is refused; 0 disables the floor.
     ///
-    /// Off by default, because `flowvs-rust-plan.md` §5 wants every improvement opt-in so the
-    /// defaults still reproduce flowVS. 2.5 is the convention the cofactor check used.
+    /// **On by default at 2.5**, which is where the plan and the operator part company. The
+    /// crate stays flowVS, because that is what it is for; the operator has to hand a biologist
+    /// a number they will not check. On an ordinary two-population channel the search can find a
+    /// second minimum near a cofactor of 2 that beats the real one — the degenerate case where
+    /// asinh has become a logarithm of the noise, and equal variances are a coincidence. It is
+    /// reported `resolved`, because the two objectives are a factor of 2.5 apart, well outside
+    /// what the fragile test looks for. Measured on a synthetic mixture: flowVS 2.39, floored
+    /// 76.0, R's answer on the same shape 79.87.
+    ///
+    /// Set it to 0 to reproduce flowVS exactly, including that failure.
     pub cofactor_floor: f64,
     /// Which column factor identifies the sample for estimation. Empty means the first one.
     ///
@@ -64,7 +76,7 @@ impl Default for Settings {
             signif_level: 0.05,
             bw_corr: 1.0,
             collect_max_cells: crate::output::COLLECT_MAX_CELLS,
-            cofactor_floor: 0.0,
+            cofactor_floor: DEFAULT_COFACTOR_FLOOR,
             sample_factor: String::new(),
         }
     }
@@ -137,7 +149,7 @@ pub fn settings_from_ctx(ctx: &ContextBase) -> Result<Settings> {
         collect_max_cells: num("collect_max_cells", crate::output::COLLECT_MAX_CELLS as f64)?
             .max(0.0) as usize,
         cofactor_floor: {
-            let v = num("cofactor_floor", 0.0)?;
+            let v = num("cofactor_floor", DEFAULT_COFACTOR_FLOOR)?;
             if v < 0.0 {
                 bail!("property 'cofactor_floor' must be >= 0, got {v}");
             }

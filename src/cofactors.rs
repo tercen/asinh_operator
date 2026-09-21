@@ -303,6 +303,103 @@ mod tests {
         assert_eq!(cells_per_sample(3000, 10_000, 10_000), MIN_CELLS_PER_SAMPLE);
     }
 
+    /// Three two-population samples, offered through `Plan::offer` exactly as a chunk of the
+    /// crosstab would be. This is the only test that crosses into the `flowvs` crate, so it is
+    /// what notices if that dependency moves under us — and it pins the behaviour the operator's
+    /// default depends on.
+    ///
+    /// On this mixture flowVS prefers a cofactor of 2.4, where `asinh` has become a logarithm of
+    /// the negative population and the equal variances are a coincidence. The published R answer
+    /// on data of the same shape is 79.9. The σ_neg floor is what stands between a biologist and
+    /// that number, which is why the operator turns it on.
+    #[test]
+    fn the_floor_rescues_a_channel_flowvs_gets_wrong() {
+        let plan = Plan {
+            channel_names: vec!["CD4".into()],
+            sample_of_col: vec![0, 1, 2],
+            n_channels: 1,
+            n_samples: 3,
+            cells: 2000,
+        };
+        // 70% negatives at sd 30, positives at three locations and spreads: the shape of
+        // flowvs-rs's own fixture, generated here so this repository carries no data file.
+        let mut rng = Lcg::new(20260921);
+        let mut sample = |mu: f64, sd: f64| -> Vec<f64> {
+            (0..2000)
+                .map(|k| {
+                    if k % 10 < 7 {
+                        30.0 * rng.normal()
+                    } else {
+                        mu + sd * rng.normal()
+                    }
+                })
+                .collect::<Vec<f64>>()
+        };
+        let y: Vec<f64> = [
+            sample(1800.0, 600.0),
+            sample(2100.0, 700.0),
+            sample(1500.0, 500.0),
+        ]
+        .concat();
+        let ri = vec![0i32; y.len()];
+        let ci: Vec<i32> = (0..3).flat_map(|c| std::iter::repeat_n(c, 2000)).collect();
+
+        let offer = |s: &Settings| {
+            let mut res = HashMap::new();
+            plan.offer(&mut res, &ri, &ci, &y, s.seed);
+            assert_eq!(res.len(), 3, "one reservoir per sample");
+            plan.finish(res, s)
+        };
+
+        // flowVS unmodified: the degenerate minimum, and it calls itself resolved.
+        let bare = offer(&Settings {
+            cofactor_floor: 0.0,
+            ..Settings::default()
+        });
+        assert!(
+            bare.table[0].cofactor < 5.0,
+            "expected the degenerate minimum, got {}",
+            bare.table[0].cofactor
+        );
+        assert_eq!(bare.table[0].status, "resolved");
+
+        // The operator's default: floored onto the negative spread, and it says so.
+        let floored = offer(&Settings::default());
+        let row = &floored.table[0];
+        assert_eq!(row.channel, "CD4");
+        assert_eq!(row.status, "floored");
+        assert!(
+            (50.0..=120.0).contains(&row.cofactor),
+            "the floor should land near the R answer of 79.9, got {}",
+            row.cofactor
+        );
+        assert_eq!(
+            row.flowvs_cofactor, bare.table[0].cofactor,
+            "what flowVS said is kept"
+        );
+        assert_eq!(row.cofactor, floored.per_row[0]);
+        assert_eq!(row.cells_used, 2000);
+    }
+
+    /// A small deterministic normal generator, so the test needs no `rand` dependency and gives
+    /// the same mixture on every machine.
+    struct Lcg(u64);
+    impl Lcg {
+        fn new(seed: u64) -> Self {
+            Self(seed)
+        }
+        fn unit(&mut self) -> f64 {
+            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((self.0 >> 11) as f64) / ((1u64 << 53) as f64)
+        }
+        /// Box-Muller, one value per call; the discarded half costs nothing here.
+        fn normal(&mut self) -> f64 {
+            let u1 = self.unit().max(1e-12);
+            let u2 = self.unit();
+            (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
+        }
+    }
+
     #[test]
     fn the_subsample_is_the_same_on_every_run() {
         let take = |seed: u64| {

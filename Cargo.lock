@@ -639,6 +639,7 @@ dependencies = [
 [[package]]
 name = "flowvs"
 version = "0.1.0"
+source = "git+https://github.com/tercen/flowvs-rs?tag=0.1.0#46b4d9ea6a60adb4dace8f6ab05a2479d870bbd1"
 dependencies = [
  "libm",
  "rayon",

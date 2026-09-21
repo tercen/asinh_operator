@@ -13,17 +13,9 @@ RUN cargo install cargo-chef --locked
 # bumps it, so the recipe would change on every release and the ~10 minute dependency build would
 # never be reused. Normalise the version for the recipe only, then restore the real manifest.
 COPY Cargo.toml Cargo.lock ./
-# Two edits to the manifest, both temporary.
-#
-# `flowvs` is a **path** dependency while that crate is local-only, and cargo resolves a path
-# dependency even when its feature is off, so the image cannot build with the line present: the
-# crate is not in this build context. The image is the default-feature build, so strip it. This
-# disappears the day flowvs has a git remote and the dependency becomes a normal one.
-#
 # The version is normalised because cargo-chef's recipe carries it, and a release commit always
 # bumps it: without this the ~10 minute dependency layer is never reused between releases.
-RUN sed -i -e '/^flowvs = { path =/d' -e 's/^auto = \["dep:flowvs"\]/auto = []/' Cargo.toml \
- && cp Cargo.toml Cargo.toml.keep \
+RUN cp Cargo.toml Cargo.toml.keep \
  && sed -i 's/^version = ".*"/version = "0.0.0"/' Cargo.toml \
  && cargo chef prepare --recipe-path recipe.json
 RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path recipe.json

@@ -139,9 +139,16 @@ Samples come from the column factor named by `sample_factor`, or the first one. 
 because flowVS pools populations across samples, and in a cytometry projection the columns are
 events while the sample is something like `filename`.
 
-`auto` is behind a cargo feature because `flowvs` is a path dependency and the image build copies
-this repository alone. Drop the feature once that crate has a remote: shipping an image where a
-declared method sometimes exists is worse than either alternative.
+`auto` is a cargo feature, **on by default**, pinning `tercen/flowvs-rs` at a tag. It was off
+while that crate was local-only, because cargo resolves a `path` dependency even when its feature
+is off and the image build copies this repository alone — which is why the Dockerfile and CI used
+to strip the line. Both strips are gone. Keep the pin on a tag rather than a branch: the cofactors
+the crate returns are this operator's output, and output must not move under a rebuild.
+
+`cofactor_floor` defaults to **2.5** here while the crate defaults it off. The crate's job is to be
+flowVS; the operator's is to hand a biologist a number they will not check, and flowVS can prefer a
+degenerate cofactor near 2 on an ordinary channel and call it `resolved`. `README.md` has the
+measurement. Setting the property to 0 reproduces flowVS exactly, failure included.
 
 ## How stable is a flowVS cofactor? (measured 2026-09-20)
 

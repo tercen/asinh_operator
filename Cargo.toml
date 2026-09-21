@@ -35,13 +35,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # (create-rust-operator §5; read_fcs measured the difference).
 tikv-jemallocator = "0.6"
 
-# Cofactor estimation for `method = auto`. Optional because the crate is local-only for now:
-# the Docker build copies this repository alone, so the feature can only be switched on once
-# flowvs has a git remote. Everything else builds and ships without it.
-flowvs = { path = "../flowvs-rs", optional = true }
+# Cofactor estimation for `method = auto`. Pinned to a tag, not a branch: the cofactors this
+# crate returns are the operator's output, so they must not change under a rebuild.
+flowvs = { git = "https://github.com/tercen/flowvs-rs", tag = "0.1.0", optional = true }
 
 [features]
-default = []
+# `auto` is on by default so the shipped image can estimate cofactors. It is still a feature
+# because the test suite and the dev loop are useful without a network fetch of the estimator.
+default = ["auto"]
 auto = ["dep:flowvs"]
 
 [dev-dependencies]

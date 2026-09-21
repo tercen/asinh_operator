@@ -142,6 +142,39 @@ fn operator_spec_matches_the_result_columns() {
         .collect();
     assert_eq!(methods, ["fixed", "manual", "auto"]);
 
+    // A default that differs between the manifest and the code is invisible: the platform shows
+    // one number in the property panel and the operator uses another. `cofactor_floor` was
+    // changed from 0 to 2.5 in both places on the same day, and only this test would notice if
+    // it had been changed in one.
+    let default_of = |name: &str| -> f64 {
+        spec["properties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap_or_else(|| panic!("property '{name}' is not declared"))["defaultValue"]
+            .as_f64()
+            .unwrap_or_else(|| panic!("property '{name}' has no numeric default"))
+    };
+    let d = asinh_operator::props::Settings::default();
+    for (name, code) in [
+        ("scale", d.scale),
+        ("cofactor_floor", d.cofactor_floor),
+        ("signifLevel", d.signif_level),
+        ("bwCorr", d.bw_corr),
+        ("seed", d.seed as f64),
+        ("threads", d.threads as f64),
+        ("estimate_max_cells", d.estimate_max_cells as f64),
+        ("collect_max_cells", d.collect_max_cells as f64),
+    ] {
+        assert_eq!(
+            default_of(name),
+            code,
+            "property '{name}': operator.json says {}, Settings::default() says {code}",
+            default_of(name)
+        );
+    }
+
     // the two output alternatives: auto adds the cofactor table
     let alts = spec["operatorSpec"]["outputSpecsV2"][0]["alternatives"]
         .as_array()
