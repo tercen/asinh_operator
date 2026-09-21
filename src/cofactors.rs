@@ -31,10 +31,20 @@ pub const MIN_CELLS_PER_SAMPLE: usize = 500;
 ///
 /// It depends on the projection, not on the machine, so two runs of the same step keep the same
 /// cells and produce the same cofactors.
-pub fn cells_per_sample(asked: usize, n_channels: usize, n_samples: usize) -> usize {
+pub fn cells_per_sample(asked: usize, n_channels: usize, n_samples: usize) -> Result<usize> {
     let groups = n_channels.max(1) * n_samples.max(1);
     let affordable = ESTIMATE_BUDGET_BYTES / (groups * std::mem::size_of::<f64>());
-    asked.min(affordable).max(MIN_CELLS_PER_SAMPLE)
+    if affordable < MIN_CELLS_PER_SAMPLE {
+        // The floor used to win here, and the reservoirs then took whatever memory that meant:
+        // 15,000 "samples" x 20 channels x 500 cells was 1.2 GB against a 600 MB booking.
+        bail!(
+            "{n_samples} samples x {n_channels} channels cannot be estimated at {MIN_CELLS_PER_SAMPLE} \
+             cells each inside the {} MB estimation budget. Set 'sample_factor' to the factor that \
+             identifies a sample (for example the file name), or project fewer samples.",
+            ESTIMATE_BUDGET_BYTES / 1_000_000
+        );
+    }
+    Ok(asked.min(affordable).max(MIN_CELLS_PER_SAMPLE))
 }
 
 /// Deterministic per-group stream: the same (seed, channel, sample) always keeps the same cells.
@@ -73,7 +83,8 @@ struct Reservoir {
 impl Reservoir {
     fn new(cap: usize, seed: u64, a: usize, b: usize) -> Self {
         Self {
-            keep: Vec::with_capacity(cap.min(4096)),
+            // Grown on demand: a reservoir that sees three values must not cost 4 KB.
+            keep: Vec::new(),
             seen: 0,
             cap,
             rng: Xorshift::new(seed, a, b),
@@ -168,7 +179,7 @@ impl Plan {
         // The subsample is what estimation costs in memory, and `estimate_max_cells` is a
         // property, so an operator that trusted it could be asked for gigabytes and be killed.
         // Bound the total rather than the property: the booking holds whatever a user types.
-        let cells = cells_per_sample(s.estimate_max_cells, n_channels, n_samples);
+        let cells = cells_per_sample(s.estimate_max_cells, n_channels, n_samples)?;
         if cells < s.estimate_max_cells {
             tracing::warn!(
                 asked = s.estimate_max_cells,
@@ -291,16 +302,22 @@ mod tests {
     #[test]
     fn the_subsample_stays_inside_its_budget() {
         // a cohort-scale projection: the ask is cut down
-        let cells = cells_per_sample(200_000, 43, 93);
+        let cells = cells_per_sample(200_000, 43, 93).unwrap();
         assert!(cells < 200_000);
         assert!(43 * 93 * cells * 8 <= ESTIMATE_BUDGET_BYTES);
         // a small one: the ask is honoured
-        assert_eq!(cells_per_sample(3000, 20, 10), 3000);
+        assert_eq!(cells_per_sample(3000, 20, 10).unwrap(), 3000);
     }
 
     #[test]
-    fn a_tiny_budget_never_goes_below_the_floor() {
-        assert_eq!(cells_per_sample(3000, 10_000, 10_000), MIN_CELLS_PER_SAMPLE);
+    fn too_many_samples_for_the_budget_is_refused_not_allocated() {
+        let e = cells_per_sample(3000, 20, 15_000).unwrap_err().to_string();
+        assert!(e.contains("sample_factor"), "{e}");
+        // and the edge that just fits is honoured
+        assert_eq!(
+            cells_per_sample(3000, 1, ESTIMATE_BUDGET_BYTES / (8 * MIN_CELLS_PER_SAMPLE)).unwrap(),
+            MIN_CELLS_PER_SAMPLE
+        );
     }
 
     /// Three two-population samples, offered through `Plan::offer` exactly as a chunk of the

@@ -15,7 +15,7 @@ operator does.
 |---|---|---:|---|
 | `method` | Enumerated | `fixed` | `fixed` uses `scale` for every channel; `manual` takes a cofactor per channel from the second row factor; `auto` estimates them with flowVS. |
 | `scale` | Double | 5 | Cofactor for `fixed`, and the fallback for a channel `auto` cannot resolve. |
-| `sample_factor` | String | *(first)* | `auto`: which column factor identifies the sample. |
+| `sample_factor` | String | *(none)* | `auto`: the column factor that identifies a sample, for example the file name. Unset, the whole crosstab is one sample — the operator says so in its log — and a first column factor that is one value per column (the event id) is never used as a sample. |
 | `estimate_max_cells` | Double | 3000 | `auto`: cells per sample used for estimation. |
 | `seed` | Double | 1 | `auto`: seed for that subsample, so the estimate repeats. |
 | `threads` | Double | 4 | `auto`: channels estimated at once. |

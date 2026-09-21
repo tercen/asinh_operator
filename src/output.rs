@@ -238,34 +238,6 @@ pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow
     Ok(())
 }
 
-fn write_simple_relation<W: Write>(w: &mut TsonWriter<W>, id: &str) -> Result<()> {
-    w.map(3)?;
-    w.key("kind")?;
-    w.str("SimpleRelation")?;
-    w.key("id")?;
-    w.str(id)?;
-    w.key("index")?;
-    w.i32(0)?;
-    Ok(())
-}
-
-fn write_column_pair<W: Write>(w: &mut TsonWriter<W>, l: &[&str], r: &[&str]) -> Result<()> {
-    w.map(3)?;
-    w.key("kind")?;
-    w.str("ColumnPair")?;
-    w.key("lColumns")?;
-    w.list(l.len())?;
-    for s in l {
-        w.str(s)?;
-    }
-    w.key("rColumns")?;
-    w.list(r.len())?;
-    for s in r {
-        w.str(s)?;
-    }
-    Ok(())
-}
-
 /// Close the result. With a cofactor table there is one join, declaring it as a standalone
 /// relation beside the per-cell one (the shape read_fcs uses for its summary table).
 pub fn write_footer<W: Write>(w: &mut TsonWriter<W>, _with_cofactors: bool) -> Result<()> {

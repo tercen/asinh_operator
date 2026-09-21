@@ -131,17 +131,20 @@ pub async fn row_cofactors(ctx: &ContextBase) -> Result<Vec<f64>> {
 
 /// Read one named column of a TSON table as f64.
 pub fn column_as_f64(bytes: &[u8], name: &str) -> Result<Vec<f64>> {
-    let v = rustson::decode_bytes(bytes).map_err(|e| anyhow!("decode table: {e:?}"))?;
-    let rustson::Value::MAP(m) = v else {
-        bail!("table is not a map")
-    };
-    let values = find_column(&m, name).ok_or_else(|| {
-        anyhow!(
-            "column '{name}' not found (table has {:?})",
-            column_names(&m)
-        )
-    })?;
-    as_f64(values, name)
+    let mut out = Vec::new();
+    for v in documents(bytes)? {
+        let rustson::Value::MAP(m) = v else {
+            bail!("table is not a map")
+        };
+        let values = find_column(&m, name).ok_or_else(|| {
+            anyhow!(
+                "column '{name}' not found (table has {:?})",
+                column_names(&m)
+            )
+        })?;
+        out.extend_from_slice(&as_f64(values, name)?);
+    }
+    Ok(out)
 }
 
 /// The first row factor's values, one per row index — the channel names.
@@ -192,31 +195,55 @@ pub async fn column_groups(ctx: &ContextBase, wanted: &str) -> Result<Vec<usize>
         .await
         .map_err(|e| anyhow!("read column factor '{name}': {e}"))?;
     let labels = column_as_strings(&bytes, &name)?;
-    let mut seen: Vec<String> = Vec::new();
-    Ok(labels
-        .into_iter()
-        .map(|l| match seen.iter().position(|x| *x == l) {
-            Some(i) => i,
-            None => {
-                seen.push(l);
-                seen.len() - 1
-            }
+    let (groups, n_groups) = group_indices(&labels);
+    if wanted.is_empty() && n_groups == labels.len() && labels.len() > 1 {
+        // The first column factor identifies every column on its own — it is the event id, as
+        // it always is when cells are on columns. flowVS pools populations across samples, and
+        // one cell is not a sample. Treat the crosstab as one sample, and say what to set.
+        tracing::warn!(
+            factor = %name,
+            columns = labels.len(),
+            "no 'sample_factor' set and the first column factor is one value per column; \
+             estimating on the whole crosstab as one sample. Set 'sample_factor' to the factor \
+             that identifies a sample (for example the file name) for a per-sample estimate."
+        );
+        return Ok(vec![0; labels.len()]);
+    }
+    Ok(groups)
+}
+
+/// Group index per column, in order of first appearance, and the number of groups.
+pub fn group_indices(labels: &[String]) -> (Vec<usize>, usize) {
+    let mut index: HashMap<&str, usize> = HashMap::new();
+    let groups = labels
+        .iter()
+        .map(|l| {
+            let next = index.len();
+            *index.entry(l.as_str()).or_insert(next)
         })
-        .collect())
+        .collect();
+    (groups, index.len())
 }
 
 /// Read one named column of a TSON table as strings, whatever its stored type.
 pub fn column_as_strings(bytes: &[u8], name: &str) -> Result<Vec<String>> {
-    let v = rustson::decode_bytes(bytes).map_err(|e| anyhow!("decode table: {e:?}"))?;
-    let rustson::Value::MAP(m) = v else {
-        bail!("table is not a map")
-    };
-    let values = find_column(&m, name).ok_or_else(|| {
-        anyhow!(
-            "column '{name}' not found (table has {:?})",
-            column_names(&m)
-        )
-    })?;
+    let mut out = Vec::new();
+    for v in documents(bytes)? {
+        let rustson::Value::MAP(m) = v else {
+            bail!("table is not a map")
+        };
+        let values = find_column(&m, name).ok_or_else(|| {
+            anyhow!(
+                "column '{name}' not found (table has {:?})",
+                column_names(&m)
+            )
+        })?;
+        out.extend(one_column_as_strings(values, name)?);
+    }
+    Ok(out)
+}
+
+fn one_column_as_strings(values: &rustson::Value, name: &str) -> Result<Vec<String>> {
     Ok(match values {
         rustson::Value::LSTSTR(sv) => sv
             .try_to_vec()
@@ -225,6 +252,33 @@ pub fn column_as_strings(bytes: &[u8], name: &str) -> Result<Vec<String>> {
         rustson::Value::LSTI32(v) => v.iter().map(|x| x.to_string()).collect(),
         other => bail!("column '{name}' has an unsupported type ({other:?})"),
     })
+}
+
+/// Every TSON document in a response, in order.
+///
+/// **A response is not one document.** `stream_tson` concatenates every gRPC message, and the
+/// server pages its answer — about 15,000 rows a page — so the buffer holds one complete
+/// document per page. Reading only the first is silent and wrong in two different ways: a cell
+/// chunk loses everything past the first page, and a column table of 48,000 columns comes back
+/// looking like a study with one batch, because the first page holds only the first batch.
+pub fn documents(bytes: &[u8]) -> Result<Vec<rustson::Value>> {
+    let mut out = Vec::new();
+    let mut cur = std::io::Cursor::new(bytes);
+    while (cur.position() as usize) < bytes.len() {
+        let before = cur.position();
+        let v = rustson::decode(cur.clone()).map_err(|e| anyhow!("decode document: {e:?}"))?;
+        // `rustson::decode` takes the cursor by value and reports nothing about how far it read,
+        // so the length comes from re-encoding. Cheap beside the transfer it saves.
+        let consumed = rustson::encode(&v)
+            .map_err(|e| anyhow!("measure document: {e:?}"))?
+            .len();
+        if consumed == 0 {
+            break;
+        }
+        cur.set_position(before + consumed as u64);
+        out.push(v);
+    }
+    Ok(out)
 }
 
 /// Find a named column's values in a decoded TSON table.
@@ -345,4 +399,26 @@ fn as_f64(v: &rustson::Value, name: &str) -> Result<Vec<f64>> {
         rustson::Value::LSTU8(v) => v.iter().map(|x| *x as f64).collect(),
         other => bail!("column '{name}' is not a numeric list ({other:?})"),
     })
+}
+
+#[cfg(test)]
+mod grouping_tests {
+    use super::group_indices;
+
+    #[test]
+    fn groups_are_numbered_by_first_appearance() {
+        let l: Vec<String> = ["b", "a", "b", "c", "a"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(group_indices(&l), (vec![0, 1, 0, 2, 1], 3));
+    }
+
+    #[test]
+    fn one_value_per_column_is_not_a_sample() {
+        // Every column its own group is the event-id case: the caller collapses it to one.
+        let l: Vec<String> = (0..5).map(|i| i.to_string()).collect();
+        let (_, n) = group_indices(&l);
+        assert_eq!(n, l.len());
+    }
 }

@@ -1,3 +1,31 @@
+## 0.1.5: `auto` no longer takes a sample per cell (2026-09-21)
+
+Faris ran `auto` on tercen.com and the task was killed for memory. Not a booking problem: with no
+`sample_factor` set, the operator took the **first column factor** as the sample — and on a
+cytometry projection that is the event id, so every cell became its own sample. Then the
+estimation floor of 500 cells per sample beat the 128 MB budget, and each reservoir
+preallocated 4 KB. On a 100,000-cell crosstab in Studio that was 15,000 "samples" (one server
+page of the column table — the column reader was also single-page) and **1.33 GB** against a
+600 MB booking.
+
+Three fixes, each measured: with no `sample_factor`, a column factor that has one value per
+column is treated as *no* sample factor and the crosstab is one sample, with a warning that
+says what to set; the budget now refuses rather than allocating when the floor cannot be met
+(`… cannot be estimated … Set 'sample_factor' …`); reservoirs grow on demand. The column reader
+walks every page, as the cell reader already did.
+
+| projection | before | after |
+|---|---|---|
+| 100,000 cells x 20 channels, no sample factor | 1.33 GB | **60 MB** |
+| 500,000 cells x 20 channels, 12 samples | — | **211 MB** |
+
+That is 18.8 bytes per value in collect mode (the three columns, 16 B, plus the result buffer),
+and the estimation is bounded whatever the sample count. The memory model was a constant
+600 MB — designed, never measured, and noted as such since the first release. It is now
+`0.000025 x n_main + 180 MB`: 430 MB booked where 211 was used at 10 M values. Above
+`collect_max_cells` (20 M) the operator streams and the booking over-estimates; lower the
+property if a cohort-scale step is refused for memory.
+
 ## 0.1.4: the Cofactors table could not be built on (2026-09-21)
 
 `auto` emitted its Cofactors table as a second relation with an explicit `JoinOperator` on an

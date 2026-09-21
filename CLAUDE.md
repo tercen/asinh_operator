@@ -233,3 +233,16 @@ Every table in `tables` must carry `.ri` and/or `.ci`, and the server joins it b
 is no crosstab to join against) gave a composite that no downstream step could query. The only
 test that sees this is the platform's `OperatorUnitTest`, because it diffs the assembled
 relations; `tests/asinh_auto.json` exists for that reason. Measured on Studio, 2026-09-21.
+
+## The sample factor, and why `auto` OOMed in production
+
+With no `sample_factor`, the sample used to be the *first column factor*. On a cytometry
+projection that is the event id, so every cell was a sample, the 500-cell floor overrode the
+128 MB budget, and the reservoirs alone were 1.33 GB on 100,000 cells. Now: a first column
+factor with one value per column is treated as no sample factor (one sample, and a warning
+naming the property); a sample count the budget cannot afford at the floor is refused with the
+same advice; reservoirs allocate on demand. `column_as_strings` walks every server page — it
+read one, so a real sample factor on more than ~15,000 cells put every later cell in sample 0.
+
+Memory is now measured, not designed: 18.8 B/value in collect mode, bounded estimation. See
+`STATUS.md` for the two points the model is fitted to.
