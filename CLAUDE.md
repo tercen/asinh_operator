@@ -224,3 +224,12 @@ this the ~10 minute dependency layer is never reused between releases (measured 
 3. Regenerate `tests/test.json`'s goldens from a Studio run of **this** operator once it installs,
    so the Tercen unit test covers the Rust output rather than the R one.
 4. `manual` mode end to end with a cofactor table, which is how the CYTOSHRINK pipeline will use it.
+
+## An extra table needs `.ri` or `.ci`; never declare a join on an empty key
+
+Every table in `tables` must carry `.ri` and/or `.ci`, and the server joins it by those — a
+`.ri`-only table is a per-row annotation, which is what the Cofactors table is. Declaring a
+`JoinOperator` with an empty `ColumnPair` instead (copied from an import operator, where there
+is no crosstab to join against) gave a composite that no downstream step could query. The only
+test that sees this is the platform's `OperatorUnitTest`, because it diffs the assembled
+relations; `tests/asinh_auto.json` exists for that reason. Measured on Studio, 2026-09-21.

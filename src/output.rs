@@ -185,6 +185,14 @@ pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow
             name: "seed",
             ty: "int32",
         },
+        // The row index, which is what makes this a per-channel annotation the server can join
+        // on. A table in `tables` without `.ri` or `.ci` is rejected by the worker
+        // (`OperatorResult -- .ci or .ri attribute is required`); one with `.ri` alone is
+        // joined on rows, the R client's convention for a per-variable result.
+        ColSpec {
+            name: ".ri",
+            ty: "int32",
+        },
     ];
     let n = rows.len();
     w.map(4)?;
@@ -225,6 +233,8 @@ pub fn write_cofactor_table<W: Write>(w: &mut TsonWriter<W>, rows: &[CofactorRow
     w.i32_list(&rows.iter().map(|r| r.cells_used).collect::<Vec<_>>())?;
     write_column_header(w, &cols[9], n)?;
     w.i32_list(&rows.iter().map(|r| r.seed).collect::<Vec<_>>())?;
+    write_column_header(w, &cols[10], n)?;
+    w.i32_list(&(0..n as i32).collect::<Vec<_>>())?;
     Ok(())
 }
 
@@ -258,20 +268,16 @@ fn write_column_pair<W: Write>(w: &mut TsonWriter<W>, l: &[&str], r: &[&str]) ->
 
 /// Close the result. With a cofactor table there is one join, declaring it as a standalone
 /// relation beside the per-cell one (the shape read_fcs uses for its summary table).
-pub fn write_footer<W: Write>(w: &mut TsonWriter<W>, with_cofactors: bool) -> Result<()> {
+pub fn write_footer<W: Write>(w: &mut TsonWriter<W>, _with_cofactors: bool) -> Result<()> {
+    // No explicit join, whatever else was written. The Python client's `save()` puts every
+    // extra table in `tables` and never sets `joinOperators`; the server then relates each
+    // table by its own columns, and a table with neither `.ri` nor `.ci` becomes a standalone
+    // relation. Declaring the join ourselves with an empty ColumnPair — the previous shape,
+    // copied from an import operator where there is no crosstab to join against — made the
+    // query engine reject the whole result downstream: `bad relation --
+    // !relation.hasAnyAttributes(attrs)`. Measured on Studio, 2026-09-21.
     w.key("joinOperators")?;
-    w.list(usize::from(with_cofactors))?;
-    if with_cofactors {
-        w.map(4)?;
-        w.key("kind")?;
-        w.str("JoinOperator")?;
-        w.key("joinType")?;
-        w.str("")?;
-        w.key("leftPair")?;
-        write_column_pair(w, &[], &[])?;
-        w.key("rightRelation")?;
-        write_simple_relation(w, COFACTORS)?;
-    }
+    w.list(0)?;
     w.flush()?;
     Ok(())
 }

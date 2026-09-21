@@ -1,3 +1,25 @@
+## 0.1.4: the Cofactors table could not be built on (2026-09-21)
+
+`auto` emitted its Cofactors table as a second relation with an explicit `JoinOperator` on an
+empty `ColumnPair` — a shape copied from `read_fcs`, where it is right because an import operator
+has no crosstab on the left. Here it produced a composite the query engine refuses:
+`bad relation -- !relation.hasAnyAttributes(attrs)` on any downstream step. Every `auto` result
+was a dead end, and no `cargo test` could see it, because the join happens inside Tercen after
+the operator's bytes.
+
+The server's rule, found by trying the alternatives on Studio: every table in `tables` must
+carry `.ri` or `.ci` (`OperatorResult -- .ci or .ri attribute is required` otherwise), and the
+server joins it by those. The Cofactors table now carries `.ri`, one row per channel, and no
+join is declared. Downstream projection: `DoneState`; the tree shows the server keying it on
+`.ri` and attaching it through the row factor.
+
+`tests/asinh_auto.json` is the platform's unit test for that shape. Its numbers are
+self-recorded on `crabs-long.csv` — a dataset with one sample and 200 cells per channel, on
+which flowVS finds no populations and every channel comes back `unstable`. It guards the join,
+not the estimate; the estimate is guarded by flowvs-rs's parity tests against R. Known and
+left alone: an `unstable` channel still uses flowVS's number rather than `scale`, because the
+number is finite; whether it should fall back is a separate decision.
+
 # asinh_rust_operator — status, morning of 2026-09-20
 
 Built overnight against the goal in `~/tercen/goals/2026-09-19-asinh-flowvs.md`. **Local git only:

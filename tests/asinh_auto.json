@@ -1,0 +1,32 @@
+{
+  "kind": "OperatorUnitTest",
+  "name": "asinh_auto_shape",
+  "namespace": "ds0",
+  "inputDataUri": "crabs-long.csv",
+  "outputDataUri": [
+    "auto_table1.csv",
+    "auto_table2.csv",
+    "auto_table3.csv",
+    "auto_table4.csv"
+  ],
+  "columns": [
+    "observation"
+  ],
+  "rows": [
+    "variable"
+  ],
+  "colors": [],
+  "labels": [],
+  "yAxis": "measurement",
+  "xAxis": "",
+  "generatedOn": "09/21/2026 06:50:00 PM 2026",
+  "version": "",
+  "propertyValues": [
+    {
+      "kind": "PropertyValue",
+      "name": "method",
+      "value": "auto"
+    }
+  ],
+  "absTol": 1e-09
+}
