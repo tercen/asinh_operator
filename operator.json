@@ -14,7 +14,7 @@
   "urls": [
     "https://github.com/tercen/asinh_rust_operator"
   ],
-  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.5",
+  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.6",
   "properties": [
     {
       "kind": "EnumeratedProperty",

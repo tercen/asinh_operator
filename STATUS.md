@@ -1,3 +1,22 @@
+## 0.1.6 (2026-09-22) — memory model reshaped from three production runs
+
+Measured on tercen.com (`stats_d_actual_ram_peak` / `_anon`), fixed cofactors:
+
+| values | CPUs | wall | booked (0.1.5) | peak | anon |
+|---|---|---|---|---|---|
+| 9.0 M | 1 | 0.9 min | 425 MB | 319 MB | 178 MB |
+| 19.1 M | 2 | 1.7 min | 689 MB | **631 MB (92 %)** | 346 MB |
+| 45.1 M | 4 | 4.2 min | 1371 MB | 766 MB | 131 MB |
+
+Anonymous memory does not grow with the crosstab — the operator streams it in 1 M-value chunks — and
+the page cache of the result file saturates because the writer releases every 256 MB. The 0.1.5
+model (25 B/value + 180 MB) had the wrong shape: 92 % used at 19 M values, and 8 GB demanded for the
+312 M-value cohort. Now **2 B/value + 900 MB**: 19 M → 938 MB (67 %), 45 M → 990 MB, 312 M → 1.5 GB.
+
+Throughput is ~180,000 values/s regardless of CPUs (0.9 / 1.7 / 4.2 min): the time is the crosstab
+paging out of the server and the result going back, not the arcsinh. Extra booked cores are unused
+until the reader fetches page ranges concurrently — a design change, not done here.
+
 ## 0.1.5: `auto` no longer takes a sample per cell (2026-09-21)
 
 Faris ran `auto` on tercen.com and the task was killed for memory. Not a booking problem: with no
