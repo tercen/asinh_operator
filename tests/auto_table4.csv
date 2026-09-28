@@ -1,6 +1,6 @@
-".ri","channel","cofactor","bartlett","status","flowvs_cofactor","sigma_neg_cofactor","runner_up_cofactor","runner_up_bartlett","cells_used","seed"
-0,"BD",0.48238656430311,1000000000.0,"unstable",0.48238656430311,nan,nan,nan,3000,1
-1,"CL",0.48238656430311,1000000000.0,"unstable",0.48238656430311,nan,nan,nan,3000,1
-2,"CW",0.48238656430311,1000000000.0,"unstable",0.48238656430311,nan,nan,nan,3000,1
-3,"FL",0.48238656430311,1000000000.0,"unstable",0.48238656430311,nan,nan,nan,3000,1
-4,"RW",0.48238656430311,1000000000.0,"unstable",0.48238656430311,nan,nan,nan,3000,1
+channel,cofactor,bartlett,status,flowvs_cofactor,sigma_neg_cofactor,runner_up_cofactor,runner_up_bartlett,cells_used,seed,.ri
+BD,0.48238656430311,1000000000.0,unstable,0.48238656430311,NaN,NaN,NaN,3000,1,0
+CL,0.48238656430311,1000000000.0,unstable,0.48238656430311,NaN,NaN,NaN,3000,1,1
+CW,0.48238656430311,1000000000.0,unstable,0.48238656430311,NaN,NaN,NaN,3000,1,2
+FL,0.48238656430311,1000000000.0,unstable,0.48238656430311,NaN,NaN,NaN,3000,1,3
+RW,0.48238656430311,1000000000.0,unstable,0.48238656430311,NaN,NaN,NaN,3000,1,4

@@ -1,3 +1,19 @@
+## 0.1.7 (2026-09-28) — the auto test's fixtures, in the order the platform stores rows
+
+Installing 0.1.6 on Studio failed the `asinh_auto_shape` test with
+`bad.value -- At column .ri -- at line 2 -- val = 1 refVal = 0`. The values were right; the
+**row order** was not. The platform compares each stored table line by line, and a `(.ri, .ci)`
+result is stored in the order the operator wrote it, which is the order the crosstab streamed
+in: 2 x 2 blocks of channel by cell (`(0,0) (0,1) (1,0) (1,1) (0,2) (0,3) ...`), not row-major.
+The fixed test never saw this because its expected table came from a real run; the auto test's
+had been written by hand, row-major.
+
+`tests/auto_table1..4.csv` are now the tables of a Studio run of this operator on the test's own
+projection (`crabs-long.csv`, `observation` on columns, `variable` on rows, `method = auto`),
+exported with `tercenctl data export-csv`. Every value agrees with the previous fixtures to
+9e-16; only the order changed. Expected tables for a `.ri/.ci` result must always be taken from
+a run on the platform — never written or sorted by hand.
+
 ## 0.1.6 (2026-09-22) — memory model reshaped from three production runs
 
 Measured on tercen.com (`stats_d_actual_ram_peak` / `_anon`), fixed cofactors:
@@ -124,8 +140,8 @@ check saw on the study panel. See CLAUDE.md for the numbers and the fix.
 - **Superseded:** The runs above peaked at 11.6 MB and 28.5 MB, which
   says nothing about the 20 M-cell cap the 600 MB booking is designed around, and the streaming
   path has never run against Tercen at all.
-- **`tests/test.json` points at the R operator's goldens.** Correct for parity, but the platform
-  unit test should be regenerated from a Studio run of *this* operator once it installs.
+- ~~`tests/test.json` points at the R operator's goldens~~ — the auto test's tables now come from a
+  Studio run of this operator (0.1.7); the fixed test's came from one already.
 - ~~`auto` reports no fragility signal~~ — done. The cofactor table carries a status
   (resolved / fragile / floored / unstable), what flowVS said, the σ_neg cofactor and the
   runner-up. The floor is opt-in via `cofactor_floor`; 2.5 is the cofactor check's convention.

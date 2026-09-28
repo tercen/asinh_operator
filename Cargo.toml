@@ -1,6 +1,6 @@
 [package]
 name = "asinh_operator"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 description = "Arcsinh transform for Tercen — Rust port of tercen/asinh_operator"
 license = "AGPL-3.0"

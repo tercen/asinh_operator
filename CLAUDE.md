@@ -221,8 +221,11 @@ this the ~10 minute dependency layer is never reused between releases (measured 
 
 1. Run it in Studio against a real crosstab and measure peak RSS, then refit the memory model.
 2. Container run as uid 1000 under `--memory 600M` on that crosstab.
-3. Regenerate `tests/test.json`'s goldens from a Studio run of **this** operator once it installs,
-   so the Tercen unit test covers the Rust output rather than the R one.
+3. ~~Regenerate the goldens from a Studio run~~ — done in 0.1.7. Rule: expected tables for a
+   `(.ri, .ci)` result are compared **line by line in stored order**, and the stored order is the
+   crosstab's stream order (2 x 2 blocks of channel by cell). Regenerate them only by running
+   the operator on the test projection on Studio and exporting each simple relation with
+   `tercenctl data export-csv`; never write or sort them by hand.
 4. `manual` mode end to end with a cofactor table, which is how the CYTOSHRINK pipeline will use it.
 
 ## An extra table needs `.ri` or `.ci`; never declare a join on an empty key
