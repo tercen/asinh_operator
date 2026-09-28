@@ -1,3 +1,10 @@
+## 0.1.8 (2026-09-28) — typed sidecars for the auto test's tables
+
+0.1.7 got past the row order and failed on `bad.column.type -- cells_used -- expected double found
+int32`: with no `.schema` sidecar the platform types a fixture's columns from the CSV, and the
+cofactor table's `cells_used` / `seed` are int32. `tests/auto_table1..4.csv.schema` now declare
+every column's type, in the CSV's column order (the platform matches sidecar to CSV by position).
+
 ## 0.1.7 (2026-09-28) — the auto test's fixtures, in the order the platform stores rows
 
 Installing 0.1.6 on Studio failed the `asinh_auto_shape` test with

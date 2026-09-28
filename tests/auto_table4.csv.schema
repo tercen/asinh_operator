@@ -1,0 +1,60 @@
+{
+  "kind": "TableSchema",
+  "columns": [
+    {
+      "kind": "ColumnSchema",
+      "name": "channel",
+      "type": "string"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "cofactor",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "bartlett",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "status",
+      "type": "string"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "flowvs_cofactor",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "sigma_neg_cofactor",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "runner_up_cofactor",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "runner_up_bartlett",
+      "type": "double"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "cells_used",
+      "type": "int32"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": "seed",
+      "type": "int32"
+    },
+    {
+      "kind": "ColumnSchema",
+      "name": ".ri",
+      "type": "int32"
+    }
+  ]
+}
