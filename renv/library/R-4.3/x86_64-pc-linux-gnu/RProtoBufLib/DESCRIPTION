@@ -1,0 +1,25 @@
+Package: RProtoBufLib
+Type: Package
+Title: C++ headers and static libraries of Protocol buffers
+Version: 2.14.1
+Author: Mike Jiang
+Maintainer: Mike Jiang <mike@ozette.ai>
+Description: This package provides the headers and static library of
+        Protocol buffers for other R packages to compile and link
+        against.
+License: BSD_3_clause
+LazyLoad: true
+SystemRequirements: GNU make
+biocViews: Infrastructure
+RoxygenNote: 6.1.1
+VignetteBuilder: knitr
+Suggests: knitr, rmarkdown
+git_url: https://git.bioconductor.org/packages/RProtoBufLib
+git_branch: RELEASE_3_18
+git_last_commit: cb81f56
+git_last_commit_date: 2024-03-16
+Repository: Bioconductor 3.18
+Date/Publication: 2024-03-18
+NeedsCompilation: yes
+Packaged: 2024-03-18 22:59:13 UTC; biocbuild
+Built: R 4.3.3; x86_64-pc-linux-gnu; 2026-01-26 22:14:45 UTC; unix

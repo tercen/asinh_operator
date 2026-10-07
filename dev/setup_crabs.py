@@ -66,9 +66,9 @@ ct.columnTable = ctable(col_factors)
 ct.rowTable = ctable([gf(ROW, ROW_TYPE)])
 ct.filters = m.Filters(); ct.filters.removeNaN = False; ct.filters.namedFilters = []
 settings = m.OperatorSettings(); settings.namespace = "ds0"; settings.environment = []
-ref = m.OperatorRef(); ref.name = "asinh_rust_operator"; ref.version = "dev"
+ref = m.OperatorRef(); ref.name = "asinh_operator"; ref.version = "dev"
 ref.operatorId = ""; ref.operatorKind = ""
-ref.url = m.Url(); ref.url.uri = "https://github.com/tercen/asinh_rust_operator"
+ref.url = m.Url(); ref.url.uri = "https://github.com/tercen/asinh_operator"
 ref.propertyValues = []
 for k, v in props.items():
     pv = m.PropertyValue(); pv.name = k; pv.value = v; ref.propertyValues.append(pv)

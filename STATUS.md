@@ -90,7 +90,7 @@ not the estimate; the estimate is guarded by flowvs-rs's parity tests against R.
 left alone: an `unstable` channel still uses flowVS's number rather than `scale`, because the
 number is finite; whether it should fall back is a separate decision.
 
-# asinh_rust_operator — status, morning of 2026-09-20
+# asinh_operator (Rust, 2.x; developed as asinh_rust_operator) — status, morning of 2026-09-20
 
 Built overnight against the goal in `~/tercen/goals/2026-09-19-asinh-flowvs.md`. **Local git only:
 no remote, no image published, not installed anywhere.** One commit.

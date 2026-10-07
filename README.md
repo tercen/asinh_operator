@@ -1,7 +1,26 @@
-# asinh_rust_operator
+# asinh_operator
 
-Arcsinh transform for Tercen, with optional cofactor estimation. Rust port of
-[`tercen/asinh_operator`](https://github.com/tercen/asinh_operator).
+Arcsinh transform for Tercen, with optional cofactor estimation. **Version 2 is a Rust
+implementation** that replaces the R one (1.x, kept on the
+[`r-legacy`](https://github.com/tercen/asinh_operator/tree/r-legacy) branch and the
+`r-legacy-1.2.0` tag). It was developed as `tercen/asinh_rust_operator` and merged here with its
+history.
+
+## Changes from 1.x
+
+- **`fixed` and `manual` give the same values as 1.x.** `tests/r_goldens.rs` runs 1.x's own crabs
+  test against its expected output (gate 1e-12, measured 2.2e-16). `manual` applies the same rule
+  as 1.x, `asinh(y / cofactor)` with the cofactor from the second row factor; 2.0 refuses a zero
+  or non-finite cofactor instead of writing Inf/NaN.
+- **`auto` can differ from 1.x.** It estimates on a seeded subsample (`estimate_max_cells`, 3,000
+  cells per sample, per `sample_factor`) instead of every cell, and by default refuses a
+  degenerate cofactor (`cofactor_floor` = 2.5; set 0 for plain flowVS). The flowVS arithmetic
+  itself matches R to 2e-16 (`tercen/flowvs-rs`).
+- **`auto` adds a second table**, one row per channel: the cofactor used, its Bartlett statistic,
+  status, and the alternatives considered, so the estimate can be reviewed and frozen (feed it
+  back as the `manual` row factor).
+- **New properties:** `sample_factor`, `estimate_max_cells`, `seed`, `threads`, `cofactor_floor`.
+- **gRPC operator**, static image; needs a Tercen server with gRPC operator support.
 
 ## Input
 

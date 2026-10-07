@@ -1,18 +1,17 @@
 {
-  "name": "asinh (Rust)",
+  "name": "asinh",
   "description": "Arcsinh transform with a fixed or per-channel cofactor. Rust port of tercen/asinh_operator (fixed and manual methods).",
   "tags": [
     "transform",
     "flow cytometry",
-    "arcsinh",
-    "rust"
+    "arcsinh"
   ],
   "communicationProtocol": "grpc",
   "authors": [
     "tercen"
   ],
   "urls": [
-    "https://github.com/tercen/asinh_rust_operator"
+    "https://github.com/tercen/asinh_operator"
   ],
   "container": "ghcr.io/tercen/asinh_rust_operator:0.1.8",
   "properties": [

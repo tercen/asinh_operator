@@ -1,4 +1,4 @@
-# asinh_rust_operator — maintenance notes
+# asinh_operator — maintenance notes
 
 Rust port of `tercen/asinh_operator` (`fixed` and `manual`). Built 2026-09-19/20 following the
 `create-rust-operator` skill, as the first **crosstab** operator of the CYTOSHRINK port —
