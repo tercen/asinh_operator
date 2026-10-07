@@ -1,0 +1,278 @@
+{
+  "name": "asinh (Rust)",
+  "description": "Arcsinh transform with a fixed or per-channel cofactor. Rust port of tercen/asinh_operator (fixed and manual methods).",
+  "tags": [
+    "transform",
+    "flow cytometry",
+    "arcsinh",
+    "rust"
+  ],
+  "communicationProtocol": "grpc",
+  "authors": [
+    "tercen"
+  ],
+  "urls": [
+    "https://github.com/tercen/asinh_rust_operator"
+  ],
+  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.8",
+  "properties": [
+    {
+      "kind": "EnumeratedProperty",
+      "name": "method",
+      "defaultValue": "fixed",
+      "values": [
+        "fixed",
+        "manual",
+        "auto"
+      ],
+      "description": "fixed: one cofactor for every channel, from `scale`. manual: a cofactor per channel from the second row factor. auto: estimate one per channel with flowVS and emit them as a Cofactors table."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "scale",
+      "defaultValue": 5,
+      "description": "Cofactor for the fixed method, and the fallback for a channel auto cannot resolve: asinh(value / scale)."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "collect_max_cells",
+      "defaultValue": 20000000,
+      "description": "Cells above which the operator streams the result instead of buffering it; 0 always streams. Lower it on an instance with a small memory booking."
+    },
+    {
+      "kind": "StringProperty",
+      "name": "sample_factor",
+      "defaultValue": "",
+      "description": "auto only. Column factor that identifies the sample, e.g. filename. Empty uses the first column factor. flowVS pools populations across samples, so this decides what a sample is."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "estimate_max_cells",
+      "defaultValue": 3000,
+      "description": "auto only. Cells per sample used for estimation, chosen by a seeded subsample. Reduced automatically if the projection is wide enough that the subsample would not fit the estimation memory budget."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "seed",
+      "defaultValue": 1,
+      "description": "auto only. Seed for that subsample, so an estimate is repeatable. Written into the Cofactors table."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "threads",
+      "defaultValue": 4,
+      "description": "auto only. Channels estimated at once. Peak memory grows with it, so it is explicit rather than 'every core'."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "signifLevel",
+      "defaultValue": 0.05,
+      "description": "auto only. flowVS significance level for peak detection."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "cofactor_floor",
+      "defaultValue": 2.5,
+      "description": "auto only. Refuse a cofactor below this multiple of the negative population's spread, and use the floor instead; the Cofactors table then reports the channel as 'floored' and keeps what flowVS returned. On by default because the search can prefer a degenerate cofactor near 2, where asinh has become a logarithm of the noise. Set it to 0 to reproduce flowVS exactly."
+    },
+    {
+      "kind": "DoubleProperty",
+      "name": "bwCorr",
+      "defaultValue": 1.0,
+      "description": "auto only. flowVS bandwidth correction; 1.0 matches Tercen's R implementation, 1.1 is closer to the original C."
+    }
+  ],
+  "operatorSpec": {
+    "kind": "OperatorSpec",
+    "ontologyUri": "https://tercen.com/_ontology/tercen",
+    "ontologyVersion": "0.0.1",
+    "inputSpecs": [
+      {
+        "kind": "CrosstabSpec",
+        "metaFactors": [
+          {
+            "kind": "MetaFactor",
+            "name": "Row",
+            "type": "",
+            "description": "Channel (or variable) name. The manual method needs a second row factor holding that channel's cofactor.",
+            "ontologyMapping": "variable",
+            "crosstabMapping": "row",
+            "cardinality": "0..n",
+            "factors": []
+          },
+          {
+            "kind": "MetaFactor",
+            "name": "Column",
+            "type": "",
+            "description": "Event or observation identifier. For the auto method a column factor also identifies the sample; see the sample_factor property.",
+            "ontologyMapping": "observation",
+            "crosstabMapping": "column",
+            "cardinality": "0..n",
+            "factors": []
+          }
+        ],
+        "axis": [
+          {
+            "kind": "AxisSpec",
+            "metaFactors": [
+              {
+                "kind": "MetaFactor",
+                "name": "Measurement",
+                "type": "double",
+                "description": "Values to transform",
+                "ontologyMapping": "measurement",
+                "crosstabMapping": "y",
+                "cardinality": "1",
+                "factors": []
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputSpecsV2": [
+      {
+        "kind": "ConditionalJoinSpec",
+        "description": "auto also emits the cofactors it estimated",
+        "alternatives": [
+          {
+            "kind": "OutputAlternative",
+            "condition": "method = auto (transformed values and the estimated cofactors)",
+            "joinSpec": {
+              "kind": "OperatorJoinSpec",
+              "joinOperators": [
+                {
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [
+                      "Row",
+                      "Column"
+                    ],
+                    "rColumns": [
+                      "Row",
+                      "Column"
+                    ]
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "asinh",
+                        "type": "double"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [
+                      "Row"
+                    ],
+                    "rColumns": [
+                      "Row"
+                    ]
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "channel",
+                        "type": "string"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "bartlett",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "flowvs_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "sigma_neg_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "runner_up_cofactor",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "runner_up_bartlett",
+                        "type": "double"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "cells_used",
+                        "type": "int32"
+                      },
+                      {
+                        "kind": "Attribute",
+                        "name": "seed",
+                        "type": "int32"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "kind": "OutputAlternative",
+            "condition": "method = fixed or manual (transformed values only)",
+            "joinSpec": {
+              "kind": "OperatorJoinSpec",
+              "joinOperators": [
+                {
+                  "kind": "JoinOperator",
+                  "joinType": "left",
+                  "leftPair": {
+                    "kind": "ColumnPair",
+                    "lColumns": [
+                      "Row",
+                      "Column"
+                    ],
+                    "rColumns": [
+                      "Row",
+                      "Column"
+                    ]
+                  },
+                  "rightRelation": {
+                    "kind": "TableRelation",
+                    "attributes": [
+                      {
+                        "kind": "Attribute",
+                        "name": "asinh",
+                        "type": "double"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

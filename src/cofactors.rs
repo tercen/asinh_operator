@@ -1,0 +1,432 @@
+//! `method = auto`: estimate one cofactor per channel with flowVS, then transform with it.
+//!
+//! Two decisions shape this.
+//!
+//! **It estimates from a subsample.** The search evaluates its objective around a hundred times
+//! per channel, each pass running a kernel density estimate over every value. On a cohort-scale
+//! crosstab that is not something to do by accident, and flowVS practice is a few thousand cells
+//! per sample anyway. The subsample is seeded, and both the count and the seed are written into
+//! the output so the estimate can be repeated exactly.
+//!
+//! **The estimate is an output, not a secret.** It lands in a `Cofactors` table beside the
+//! transformed values, with Bartlett's statistic and an unstable flag, so it can be reviewed and
+//! then frozen: feed that table back as the cofactor row factor with `method = manual`, and the
+//! run stops depending on which cells happened to flow through it.
+use std::collections::HashMap;
+
+use anyhow::{Result, bail};
+use tercen_rs::context::ContextBase;
+
+use crate::input;
+use crate::output::CofactorRow;
+use crate::props::Settings;
+
+/// Estimation never holds more than this, whatever the properties say. 128 MB against a 600 MB
+/// booking leaves room for the transform.
+pub const ESTIMATE_BUDGET_BYTES: usize = 128 * 1000 * 1000;
+/// Below this a sample has noise, not populations.
+pub const MIN_CELLS_PER_SAMPLE: usize = 500;
+
+/// Cells kept per (channel, sample) so the whole subsample fits the budget.
+///
+/// It depends on the projection, not on the machine, so two runs of the same step keep the same
+/// cells and produce the same cofactors.
+pub fn cells_per_sample(asked: usize, n_channels: usize, n_samples: usize) -> Result<usize> {
+    let groups = n_channels.max(1) * n_samples.max(1);
+    let affordable = ESTIMATE_BUDGET_BYTES / (groups * std::mem::size_of::<f64>());
+    if affordable < MIN_CELLS_PER_SAMPLE {
+        // The floor used to win here, and the reservoirs then took whatever memory that meant:
+        // 15,000 "samples" x 20 channels x 500 cells was 1.2 GB against a 600 MB booking.
+        bail!(
+            "{n_samples} samples x {n_channels} channels cannot be estimated at {MIN_CELLS_PER_SAMPLE} \
+             cells each inside the {} MB estimation budget. Set 'sample_factor' to the factor that \
+             identifies a sample (for example the file name), or project fewer samples.",
+            ESTIMATE_BUDGET_BYTES / 1_000_000
+        );
+    }
+    Ok(asked.min(affordable).max(MIN_CELLS_PER_SAMPLE))
+}
+
+/// Deterministic per-group stream: the same (seed, channel, sample) always keeps the same cells.
+struct Xorshift(u64);
+
+impl Xorshift {
+    fn new(seed: u64, a: usize, b: usize) -> Self {
+        // Mix the three so neighbouring groups do not share a stream.
+        let mut s = seed
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .wrapping_add((a as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9))
+            .wrapping_add((b as u64).wrapping_mul(0x94D0_49BB_1331_11EB));
+        if s == 0 {
+            s = 0x2545_F491_4F6C_DD1D;
+        }
+        Self(s)
+    }
+    fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        x
+    }
+}
+
+/// A reservoir per (channel, sample), so one pass over the crosstab is enough.
+struct Reservoir {
+    keep: Vec<f64>,
+    seen: usize,
+    cap: usize,
+    rng: Xorshift,
+}
+
+impl Reservoir {
+    fn new(cap: usize, seed: u64, a: usize, b: usize) -> Self {
+        Self {
+            // Grown on demand: a reservoir that sees three values must not cost 4 KB.
+            keep: Vec::new(),
+            seen: 0,
+            cap,
+            rng: Xorshift::new(seed, a, b),
+        }
+    }
+    fn offer(&mut self, v: f64) {
+        if !v.is_finite() {
+            return;
+        }
+        self.seen += 1;
+        if self.keep.len() < self.cap {
+            self.keep.push(v);
+        } else {
+            let j = (self.rng.next() % self.seen as u64) as usize;
+            if j < self.cap {
+                self.keep[j] = v;
+            }
+        }
+    }
+}
+
+/// What the estimation pass produced.
+pub struct Estimated {
+    /// One cofactor per row index, ready for the transform.
+    pub per_row: Vec<f64>,
+    /// The table that goes into the result.
+    pub table: Vec<CofactorRow>,
+}
+
+/// Estimate cofactors for every channel in the projection.
+///
+/// Channels come from the first row factor; samples from the column factor named by the
+/// `sample_factor` property, or the first one. R uses each
+/// column as its own sample when no column factor is present; with event-level columns that
+/// leaves one value per group and nothing to estimate, so here the whole crosstab is treated as
+/// one sample instead, which is the useful reading of the same situation.
+pub async fn estimate(ctx: &ContextBase, s: &Settings) -> Result<Estimated> {
+    let plan = Plan::new(ctx, s).await?;
+    let n_cells = input::cell_count(ctx).await?;
+    let mut res: HashMap<(usize, usize), Reservoir> = HashMap::new();
+    input::for_each_chunk(ctx, &[".ri", ".ci", ".y"], n_cells, 1_000_000, |c| {
+        plan.offer(&mut res, &c.ri, &c.ci, &c.y, s.seed);
+        Ok(())
+    })
+    .await?;
+    Ok(plan.finish(res, s))
+}
+
+/// The same estimate from values already in memory — the collect path has them, so reading the
+/// crosstab twice would be waste, and on a small projection that second pass is most of the run.
+pub async fn estimate_from_cells(
+    ctx: &ContextBase,
+    s: &Settings,
+    ri: &[i32],
+    ci: &[i32],
+    y: &[f64],
+) -> Result<Estimated> {
+    let plan = Plan::new(ctx, s).await?;
+    let mut res: HashMap<(usize, usize), Reservoir> = HashMap::new();
+    plan.offer(&mut res, ri, ci, y, s.seed);
+    Ok(plan.finish(res, s))
+}
+
+/// What estimation needs to know before it sees a single value.
+struct Plan {
+    channel_names: Vec<String>,
+    sample_of_col: Vec<usize>,
+    n_channels: usize,
+    n_samples: usize,
+    cells: usize,
+}
+
+impl Plan {
+    async fn new(ctx: &ContextBase, s: &Settings) -> Result<Self> {
+        if s.estimate_max_cells < MIN_CELLS_PER_SAMPLE {
+            bail!(
+                "property 'estimate_max_cells' is {}, and flowVS needs at least {} cells per \
+                 sample to find populations",
+                s.estimate_max_cells,
+                MIN_CELLS_PER_SAMPLE
+            );
+        }
+        let channel_names = input::row_labels(ctx).await?;
+        let sample_of_col = input::column_groups(ctx, &s.sample_factor).await?;
+        let n_channels = channel_names.len();
+        let n_samples = sample_of_col
+            .iter()
+            .copied()
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(1);
+        // The subsample is what estimation costs in memory, and `estimate_max_cells` is a
+        // property, so an operator that trusted it could be asked for gigabytes and be killed.
+        // Bound the total rather than the property: the booking holds whatever a user types.
+        let cells = cells_per_sample(s.estimate_max_cells, n_channels, n_samples)?;
+        if cells < s.estimate_max_cells {
+            tracing::warn!(
+                asked = s.estimate_max_cells,
+                using = cells,
+                n_channels,
+                n_samples,
+                budget_mb = ESTIMATE_BUDGET_BYTES / 1_000_000,
+                "estimate_max_cells reduced to stay inside the estimation memory budget"
+            );
+        }
+        tracing::info!(
+            n_channels,
+            n_samples,
+            cells_per_sample = cells,
+            "estimating cofactors (flowVS)"
+        );
+        Ok(Self {
+            channel_names,
+            sample_of_col,
+            n_channels,
+            n_samples,
+            cells,
+        })
+    }
+
+    fn offer(
+        &self,
+        res: &mut HashMap<(usize, usize), Reservoir>,
+        ri: &[i32],
+        ci: &[i32],
+        y: &[f64],
+        seed: u64,
+    ) {
+        for k in 0..y.len() {
+            let r = ri[k].max(0) as usize;
+            let c = ci[k].max(0) as usize;
+            let sample = self.sample_of_col.get(c).copied().unwrap_or(0);
+            res.entry((r, sample))
+                .or_insert_with(|| Reservoir::new(self.cells, seed, r, sample))
+                .offer(y[k]);
+        }
+    }
+
+    fn finish(&self, res: HashMap<(usize, usize), Reservoir>, s: &Settings) -> Estimated {
+        let channels: Vec<Vec<Vec<f64>>> = (0..self.n_channels)
+            .map(|ri| {
+                (0..self.n_samples)
+                    .filter_map(|sa| res.get(&(ri, sa)).map(|r| r.keep.clone()))
+                    .filter(|v| v.len() >= 10)
+                    .collect()
+            })
+            .collect();
+
+        let opts = flowvs::estimate::Options {
+            signif_level: s.signif_level,
+            bw_corr: s.bw_corr,
+            threads: s.threads,
+            floor: if s.cofactor_floor > 0.0 {
+                flowvs::estimate::Floor::SigmaNeg {
+                    factor: s.cofactor_floor,
+                }
+            } else {
+                flowvs::estimate::Floor::None
+            },
+        };
+        let t = std::time::Instant::now();
+        let est = flowvs::estimate::estimate_cofactors(&channels, opts);
+        tracing::info!(
+            secs = format!("{:.1}", t.elapsed().as_secs_f64()),
+            threads = s.threads,
+            "cofactors estimated"
+        );
+
+        let mut per_row = Vec::with_capacity(self.n_channels);
+        let mut table = Vec::with_capacity(self.n_channels);
+        for (ri, e) in est.iter().enumerate() {
+            // The crate already applied the floor where one exists, so a cofactor is only
+            // hopeless when it had nothing to fall back on either.
+            let usable = e.cofactor.is_finite() && e.cofactor > 0.0;
+            let cofactor = if usable { e.cofactor } else { s.scale };
+            if !usable {
+                tracing::warn!(
+                    channel = %self.channel_names[ri],
+                    "flowVS found no usable populations and there is no negative spread to fall \
+                     back on; using scale = {}",
+                    s.scale
+                );
+            }
+            if e.status != flowvs::estimate::Status::Resolved {
+                tracing::warn!(
+                    channel = %self.channel_names[ri],
+                    status = e.status.as_str(),
+                    flowvs = e.flowvs_cofactor,
+                    used = cofactor,
+                    "this channel's cofactor needs review"
+                );
+            }
+            per_row.push(cofactor);
+            table.push(CofactorRow {
+                channel: self.channel_names[ri].clone(),
+                cofactor,
+                objective: e.objective,
+                status: e.status.as_str().to_string(),
+                flowvs_cofactor: e.flowvs_cofactor,
+                sigma_neg_cofactor: e.sigma_neg_cofactor.unwrap_or(f64::NAN),
+                runner_up_cofactor: e.runner_up.map(|(c, _)| c).unwrap_or(f64::NAN),
+                runner_up_objective: e.runner_up.map(|(_, b)| b).unwrap_or(f64::NAN),
+                cells_used: self.cells.min(i32::MAX as usize) as i32,
+                seed: s.seed.min(i32::MAX as u64) as i32,
+            });
+        }
+        Estimated { per_row, table }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_subsample_stays_inside_its_budget() {
+        // a cohort-scale projection: the ask is cut down
+        let cells = cells_per_sample(200_000, 43, 93).unwrap();
+        assert!(cells < 200_000);
+        assert!(43 * 93 * cells * 8 <= ESTIMATE_BUDGET_BYTES);
+        // a small one: the ask is honoured
+        assert_eq!(cells_per_sample(3000, 20, 10).unwrap(), 3000);
+    }
+
+    #[test]
+    fn too_many_samples_for_the_budget_is_refused_not_allocated() {
+        let e = cells_per_sample(3000, 20, 15_000).unwrap_err().to_string();
+        assert!(e.contains("sample_factor"), "{e}");
+        // and the edge that just fits is honoured
+        assert_eq!(
+            cells_per_sample(3000, 1, ESTIMATE_BUDGET_BYTES / (8 * MIN_CELLS_PER_SAMPLE)).unwrap(),
+            MIN_CELLS_PER_SAMPLE
+        );
+    }
+
+    /// Three two-population samples, offered through `Plan::offer` exactly as a chunk of the
+    /// crosstab would be. This is the only test that crosses into the `flowvs` crate, so it is
+    /// what notices if that dependency moves under us — and it pins the behaviour the operator's
+    /// default depends on.
+    ///
+    /// On this mixture flowVS prefers a cofactor of 2.4, where `asinh` has become a logarithm of
+    /// the negative population and the equal variances are a coincidence. The published R answer
+    /// on data of the same shape is 79.9. The σ_neg floor is what stands between a biologist and
+    /// that number, which is why the operator turns it on.
+    #[test]
+    fn the_floor_rescues_a_channel_flowvs_gets_wrong() {
+        let plan = Plan {
+            channel_names: vec!["CD4".into()],
+            sample_of_col: vec![0, 1, 2],
+            n_channels: 1,
+            n_samples: 3,
+            cells: 2000,
+        };
+        // 70% negatives at sd 30, positives at three locations and spreads: the shape of
+        // flowvs-rs's own fixture, generated here so this repository carries no data file.
+        let mut rng = Lcg::new(20260921);
+        let mut sample = |mu: f64, sd: f64| -> Vec<f64> {
+            (0..2000)
+                .map(|k| {
+                    if k % 10 < 7 {
+                        30.0 * rng.normal()
+                    } else {
+                        mu + sd * rng.normal()
+                    }
+                })
+                .collect::<Vec<f64>>()
+        };
+        let y: Vec<f64> = [
+            sample(1800.0, 600.0),
+            sample(2100.0, 700.0),
+            sample(1500.0, 500.0),
+        ]
+        .concat();
+        let ri = vec![0i32; y.len()];
+        let ci: Vec<i32> = (0..3).flat_map(|c| std::iter::repeat_n(c, 2000)).collect();
+
+        let offer = |s: &Settings| {
+            let mut res = HashMap::new();
+            plan.offer(&mut res, &ri, &ci, &y, s.seed);
+            assert_eq!(res.len(), 3, "one reservoir per sample");
+            plan.finish(res, s)
+        };
+
+        // flowVS unmodified: the degenerate minimum, and it calls itself resolved.
+        let bare = offer(&Settings {
+            cofactor_floor: 0.0,
+            ..Settings::default()
+        });
+        assert!(
+            bare.table[0].cofactor < 5.0,
+            "expected the degenerate minimum, got {}",
+            bare.table[0].cofactor
+        );
+        assert_eq!(bare.table[0].status, "resolved");
+
+        // The operator's default: floored onto the negative spread, and it says so.
+        let floored = offer(&Settings::default());
+        let row = &floored.table[0];
+        assert_eq!(row.channel, "CD4");
+        assert_eq!(row.status, "floored");
+        assert!(
+            (50.0..=120.0).contains(&row.cofactor),
+            "the floor should land near the R answer of 79.9, got {}",
+            row.cofactor
+        );
+        assert_eq!(
+            row.flowvs_cofactor, bare.table[0].cofactor,
+            "what flowVS said is kept"
+        );
+        assert_eq!(row.cofactor, floored.per_row[0]);
+        assert_eq!(row.cells_used, 2000);
+    }
+
+    /// A small deterministic normal generator, so the test needs no `rand` dependency and gives
+    /// the same mixture on every machine.
+    struct Lcg(u64);
+    impl Lcg {
+        fn new(seed: u64) -> Self {
+            Self(seed)
+        }
+        fn unit(&mut self) -> f64 {
+            self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((self.0 >> 11) as f64) / ((1u64 << 53) as f64)
+        }
+        /// Box-Muller, one value per call; the discarded half costs nothing here.
+        fn normal(&mut self) -> f64 {
+            let u1 = self.unit().max(1e-12);
+            let u2 = self.unit();
+            (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
+        }
+    }
+
+    #[test]
+    fn the_subsample_is_the_same_on_every_run() {
+        let take = |seed: u64| {
+            let mut r = Reservoir::new(50, seed, 3, 7);
+            for i in 0..5000 {
+                r.offer(i as f64);
+            }
+            r.keep
+        };
+        assert_eq!(take(1), take(1));
+        assert_ne!(take(1), take(2));
+    }
+}
