@@ -83,7 +83,7 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "asinh_operator"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "flowvs",
@@ -638,8 +638,8 @@ dependencies = [
 
 [[package]]
 name = "flowvs"
-version = "0.1.0"
-source = "git+https://github.com/tercen/flowvs-rs?tag=0.1.0#46b4d9ea6a60adb4dace8f6ab05a2479d870bbd1"
+version = "0.1.1"
+source = "git+https://github.com/tercen/flowvs-rs?tag=0.1.1#7488c4c1a6c15e306c3ccf014f9090344add33e7"
 dependencies = [
  "libm",
  "rayon",

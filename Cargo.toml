@@ -3,7 +3,7 @@ name = "asinh_operator"
 version = "0.1.8"
 edition = "2024"
 description = "Arcsinh transform for Tercen — Rust port of tercen/asinh_operator"
-license = "AGPL-3.0"
+license = "GPL-2.0-or-later"
 
 [[bin]]
 name = "asinh_operator"
@@ -37,7 +37,7 @@ tikv-jemallocator = "0.6"
 
 # Cofactor estimation for `method = auto`. Pinned to a tag, not a branch: the cofactors this
 # crate returns are the operator's output, so they must not change under a rebuild.
-flowvs = { git = "https://github.com/tercen/flowvs-rs", tag = "0.1.0", optional = true }
+flowvs = { git = "https://github.com/tercen/flowvs-rs", tag = "0.1.1", optional = true }
 
 [features]
 # `auto` is on by default so the shipped image can estimate cofactors. It is still a feature
