@@ -1,0 +1,40 @@
+Package: Rhdf5lib
+Type: Package
+Title: hdf5 library as an R package
+Version: 1.24.2
+Authors@R: c(
+            person(
+              "Mike", "Smith", 
+              role=c("ctb", "cre"), 
+              email = "grimbough@gmail.com",
+              comment = c(ORCID = "0000-0002-7800-3848")
+            ),
+            person(
+              given = "The HDF Group",
+              role = "cph"
+            ))
+Description: Provides C and C++ hdf5 libraries.
+License: Artistic-2.0
+Copyright: src/hdf5/COPYING
+LazyLoad: true
+VignetteBuilder: knitr
+Depends: R (>= 4.2.0)
+Suggests: BiocStyle, knitr, rmarkdown, tinytest, mockery
+URL: https://github.com/grimbough/Rhdf5lib
+BugReports: https://github.com/grimbough/Rhdf5lib
+SystemRequirements: GNU make
+Encoding: UTF-8
+biocViews: Infrastructure
+RoxygenNote: 7.1.2
+git_url: https://git.bioconductor.org/packages/Rhdf5lib
+git_branch: RELEASE_3_18
+git_last_commit: f4cab37
+git_last_commit_date: 2024-02-07
+Repository: Bioconductor 3.18
+Date/Publication: 2024-02-07
+NeedsCompilation: yes
+Packaged: 2024-02-07 23:46:53 UTC; biocbuild
+Author: Mike Smith [ctb, cre] (<https://orcid.org/0000-0002-7800-3848>),
+  The HDF Group [cph]
+Maintainer: Mike Smith <grimbough@gmail.com>
+Built: R 4.3.3; x86_64-pc-linux-gnu; 2026-01-26 22:08:32 UTC; unix

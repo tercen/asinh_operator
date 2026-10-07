@@ -1,5 +1,4 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-workspace.R
+/target
+*.token
+/dev/*.token
+/tmp

@@ -1,0 +1,86 @@
+	    SUMMARY OF THE HDF5 CONFIGURATION
+	    =================================
+
+General Information:
+-------------------
+                   HDF5 Version: 1.10.7
+                  Configured on: Mon Jan 26 23:09:01 CET 2026
+                  Configured by: faris@tercenpc01
+                    Host system: x86_64-pc-linux-gnu
+              Uname information: Linux tercenpc01 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+                       Byte sex: little-endian
+             Installation point: /tmp/RtmpLfbAAM/R.INSTALLcfad16154483/Rhdf5lib/src/hdf5/hdf5
+
+Compiling Options:
+------------------
+                     Build Mode: production
+              Debugging Symbols: no
+                        Asserts: no
+                      Profiling: no
+             Optimization Level: high
+
+Linking Options:
+----------------
+                      Libraries: static
+  Statically Linked Executables: 
+                        LDFLAGS: -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro
+                     H5_LDFLAGS: 
+                     AM_LDFLAGS:  -L/tmp/RtmpLfbAAM/R.INSTALLcfad16154483/Rhdf5lib/src/hdf5/libaec-1.0.4/build/szip/lib
+                Extra libraries: -lcrypto -lcurl -lsz -laec -lz -ldl -lm 
+                       Archiver: ar
+                       AR_FLAGS: cr
+                         Ranlib: ranlib
+
+Languages:
+----------
+                              C: yes
+                     C Compiler: /usr/bin/gcc
+                       CPPFLAGS: 
+                    H5_CPPFLAGS: -D_GNU_SOURCE -D_POSIX_C_SOURCE=200809L   -DNDEBUG -UH5_DEBUG_API
+                    AM_CPPFLAGS:  -I/tmp/RtmpLfbAAM/R.INSTALLcfad16154483/Rhdf5lib/src/hdf5/libaec-1.0.4/build/szip/include
+                        C Flags: -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/r-base-FPSnzf/r-base-4.3.3=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/r-base-FPSnzf/r-base-4.3.3=/usr/src/r-base-4.3.3-2build2 -Wdate-time -D_FORTIFY_SOURCE=3 -w -fpic
+                     H5 C Flags:  -std=c99  -Wno-c++-compat -Wno-format-nonliteral -Wshadow -Wundef -Wwrite-strings -Wlarger-than=2560 -Wlogical-op -Wframe-larger-than=16384 -Wpacked-bitfield-compat -Wsync-nand -Wdouble-promotion -Wtrampolines -Wstack-usage=8192 -Wmaybe-uninitialized -Wdate-time -Warray-bounds=2 -Wc99-c11-compat -Wduplicated-cond -Whsa -Wnormalized -Wunused-const-variable -Walloca -Walloc-zero -Wduplicated-branches -Wimplicit-fallthrough=5 -Wrestrict -Wattribute-alias -Wshift-overflow=2 -Wattribute-alias=2 -Wmissing-profile -fstdarg-opt -s -Wno-aggregate-return -Wno-inline -Wno-missing-format-attribute -Wno-missing-noreturn -Wno-overlength-strings -Wno-jump-misses-init -Wno-suggest-attribute=const -Wno-suggest-attribute=noreturn -Wno-suggest-attribute=pure -Wno-suggest-attribute=format -Wno-suggest-attribute=cold -Wno-suggest-attribute=malloc -O3  -Werror=bad-function-cast -Werror=declaration-after-statement -Werror=implicit-function-declaration -Werror=missing-declarations -Werror=missing-prototypes -Werror=nested-externs -Werror=old-style-definition -Werror=packed -Werror=pointer-sign -Werror=pointer-to-int-cast -Werror=redundant-decls -Werror=strict-prototypes -Werror=switch -Wunused-function -Wformat -Werror=incompatible-pointer-types -Werror=shadow -Wcast-function-type -Wmaybe-uninitialized
+                     AM C Flags: 
+               Shared C Library: no
+               Static C Library: yes
+
+
+                        Fortran: no
+
+                            C++: yes
+                   C++ Compiler: /usr/bin/g++ -std=gnu++17
+                      C++ Flags: -w -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/build/r-base-FPSnzf/r-base-4.3.3=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/build/r-base-FPSnzf/r-base-4.3.3=/usr/src/r-base-4.3.3-2build2 -Wdate-time -D_FORTIFY_SOURCE=3 -fpic
+                   H5 C++ Flags:   -Wall -Wconversion -Wctor-dtor-privacy -Wextra -Wfloat-equal -Wformat=2 -Winit-self -Winvalid-pch -Wmissing-include-dirs -Wno-format-nonliteral -Wnon-virtual-dtor -Woverloaded-virtual -Wreorder -Wshadow -Wsign-promo -Wundef -Wwrite-strings -pedantic -Wlarger-than=2560 -Wlogical-op -Wframe-larger-than=16384 -Wpacked-bitfield-compat -Wsync-nand -Wdouble-promotion -Wtrampolines -Wstack-usage=8192 -Wmaybe-uninitialized -Wdate-time -Wopenmp-simd -Warray-bounds=2 -Wduplicated-cond -Whsa -Wnormalized -Wunused-const-variable -Walloca -Walloc-zero -Wduplicated-branches -Wimplicit-fallthrough=5 -Wrestrict -Wattribute-alias -Wshift-overflow=2 -Wattribute-alias=2 -Wmissing-profile -fstdarg-opt -s -O3  -Wcast-align -Wmissing-declarations -Werror=packed -Werror=redundant-decls -Werror=switch -Wunused-but-set-variable -Werror=unused-function -Werror=unused-variable -Wunused-parameter -Werror=shadow
+                   AM C++ Flags: 
+             Shared C++ Library: no
+             Static C++ Library: yes
+
+                           Java: no
+
+
+Features:
+---------
+                   Parallel HDF5: no
+Parallel Filtered Dataset Writes: no
+              Large Parallel I/O: no
+              High-level library: yes
+                Build HDF5 Tests: no
+                Build HDF5 Tools: no
+                    Threadsafety: no
+             Default API mapping: v110
+  With deprecated public symbols: yes
+          I/O filters (external): deflate(zlib),szip(encoder)
+                             MPE: no
+                      Direct VFD: no
+                      Mirror VFD: no
+              (Read-Only) S3 VFD: yes
+            (Read-Only) HDFS VFD: no
+                         dmalloc: no
+  Packages w/ extra debug output: none
+                     API tracing: no
+            Using memory checker: no
+ Memory allocation sanity checks: no
+          Function stack tracing: no
+                Use file locking: best-effort
+       Strict file format checks: no
+    Optimization instrumentation: no
