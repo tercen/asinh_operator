@@ -13,7 +13,7 @@
   "urls": [
     "https://github.com/tercen/asinh_operator"
   ],
-  "container": "ghcr.io/tercen/asinh_rust_operator:0.1.8",
+  "container": "ghcr.io/tercen/asinh_operator:2.0.0",
   "properties": [
     {
       "kind": "EnumeratedProperty",
