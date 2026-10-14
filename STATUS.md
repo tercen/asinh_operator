@@ -1,3 +1,11 @@
+## 2.0.1 (2026-10-14) — drop the committed renv library
+
+2.0.0 carried `renv/` in git: 14,235 files, 366 MB, the R 1.x package library that
+`renv::restore()` had materialised in the working tree. The Rust build never reads it, but the
+platform's library install imports every file of the repo tree as a document, so installing
+2.0.0 on tercen.com wrote 14k documents at ~10/s and held the library sync for ~25 minutes.
+`renv/` is removed and ignored. No code change; container bumped to 2.0.1 in the same commit.
+
 ## 0.1.8 (2026-09-28) — typed sidecars for the auto test's tables
 
 0.1.7 got past the row order and failed on `bad.column.type -- cells_used -- expected double found

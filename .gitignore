@@ -2,3 +2,4 @@
 *.token
 /dev/*.token
 /tmp
+/renv
